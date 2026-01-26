@@ -100,7 +100,6 @@ public enum CommandType
     ListPeers,
     History,
     Quit,
-    Help
 }
 
 /// <summary>

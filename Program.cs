@@ -128,9 +128,6 @@ class Program
             // Temporary basic command handling - replace with full implementation
             switch (commandResult.CommandType)
             {   
-                case CommandType.Help:
-                    _consoleUI.ShowHelp();
-                    break;
                 case CommandType.Connect:
                     Console.WriteLine("Connect command not yet implemented. See TODO comments.");
                     break;
