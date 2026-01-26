@@ -25,7 +25,7 @@ namespace SecureMessenger;
 ///    - Parses commands using ConsoleUI
 ///    - Dispatches commands to appropriate handlers
 ///
-/// 2. Listen Thread (Server) # the main initializes server, which has another thread?
+/// 2. Listen Thread (Server) 
 ///    - Runs TcpServer to accept incoming connections
 ///    - Each accepted connection spawns a receive thread
 ///
@@ -67,12 +67,6 @@ class Program
     {
         Console.WriteLine("Secure Distributed Messenger");
         Console.WriteLine("============================");
-        
-        _cancellationTokenSource = new CancellationTokenSource();
-        _messageQueue = new MessageQueue();
-        _consoleUI = new ConsoleUI(_messageQueue);
-        _tcpServer = new TcpServer();
-        _tcpClientHandler = new TcpClientHandler();
 
         // TODO: Initialize components
         // 1. Create CancellationTokenSource for shutdown signaling
@@ -81,16 +75,50 @@ class Program
         // 4. Create TcpServer for incoming connections
         // 5. Create TcpClientHandler for outgoing connections
 
+        _cancellationTokenSource = new CancellationTokenSource();
+        _messageQueue = new MessageQueue();
+        _consoleUI = new ConsoleUI(_messageQueue);
+        _tcpServer = new TcpServer();
+        _tcpClientHandler = new TcpClientHandler();
+
         // TODO: Subscribe to events
         // 1. TcpServer.OnPeerConnected - handle new incoming connections
         // 2. TcpServer.OnMessageReceived - handle received messages
         // 3. TcpServer.OnPeerDisconnected - handle disconnections
         // 4. TcpClientHandler events (same pattern)
 
+        _tcpServer.OnPeerConnected += (peer) =>
+        {
+            _consoleUI.DisplaySystem($"Peer connected: {peer}");
+        };
+        _tcpServer.OnMessageReceived += (peer, message) =>
+        {
+            _consoleUI.DisplayMessage(message);
+        };
+        _tcpServer.OnPeerDisconnected += (peer) =>
+        {
+            _consoleUI.DisplaySystem($"Peer disconnected: {peer}");
+        };
+
+        _tcpClientHandler.OnConnected += (peer) =>
+        {
+            _consoleUI.DisplaySystem($"Connected to peer: {peer}");
+        };
+        _tcpClientHandler.OnMessageReceived += (peer, message) =>
+        {
+            _consoleUI.DisplayMessage(message);
+        };
+        _tcpClientHandler.OnDisconnected += (peer) =>
+        {
+            _consoleUI.DisplaySystem($"Disconnected from peer: {peer}");
+        };
+
         // TODO: Start background threads
         // 1. Start a thread/task for processing incoming messages
         // 2. Start a thread/task for sending outgoing messages
         // Note: TcpServer.Start() will create its own listen thread
+
+
 
         Console.WriteLine("Type /help for available commands");
         Console.WriteLine();
@@ -132,7 +160,7 @@ class Program
                     Console.WriteLine("Connect command not yet implemented. See TODO comments.");
                     break;
                 case CommandType.Listen:
-                    Console.WriteLine("Listen command not yet implemented. See TODO comments.");
+                    _tcpServer.Start(int.Parse(commandResult.Args[0]));
                     break;
                 case CommandType.ListPeers:
                     Console.WriteLine("ListPeers command not yet implemented. See TODO comments.");

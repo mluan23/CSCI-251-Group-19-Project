@@ -99,7 +99,7 @@ public enum CommandType
     Listen,
     ListPeers,
     History,
-    Quit,
+    Quit
 }
 
 /// <summary>
