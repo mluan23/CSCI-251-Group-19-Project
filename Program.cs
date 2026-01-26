@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Matthew Luan
 // CSCI 251 - Secure Distributed Messenger
 // Group Project
 //
@@ -25,7 +25,7 @@ namespace SecureMessenger;
 ///    - Parses commands using ConsoleUI
 ///    - Dispatches commands to appropriate handlers
 ///
-/// 2. Listen Thread (Server)
+/// 2. Listen Thread (Server) # the main initializes server, which has another thread?
 ///    - Runs TcpServer to accept incoming connections
 ///    - Each accepted connection spawns a receive thread
 ///
@@ -57,16 +57,22 @@ class Program
 {
     // TODO: Declare your components as fields if needed for access across methods
     // Examples:
-    // private static MessageQueue? _messageQueue;
-    // private static TcpServer? _tcpServer;
-    // private static TcpClientHandler? _tcpClientHandler;
-    // private static ConsoleUI? _consoleUI;
-    // private static CancellationTokenSource? _cancellationTokenSource;
+    private static MessageQueue? _messageQueue;
+    private static TcpServer? _tcpServer;
+    private static TcpClientHandler? _tcpClientHandler;
+    private static ConsoleUI? _consoleUI;
+    private static CancellationTokenSource? _cancellationTokenSource;
 
     static async Task Main(string[] args)
     {
         Console.WriteLine("Secure Distributed Messenger");
         Console.WriteLine("============================");
+        
+        _cancellationTokenSource = new CancellationTokenSource();
+        _messageQueue = new MessageQueue();
+        _consoleUI = new ConsoleUI(_messageQueue);
+        _tcpServer = new TcpServer();
+        _tcpClientHandler = new TcpClientHandler();
 
         // TODO: Initialize components
         // 1. Create CancellationTokenSource for shutdown signaling
@@ -105,18 +111,40 @@ class Program
             //    - Quit: Set running = false
             //    - Not a command: Send as a message to peers
 
-            var input = Console.ReadLine();
-            if (string.IsNullOrEmpty(input)) continue;
+            // command parsing
+            string? input = Console.ReadLine();
+            if (string.IsNullOrEmpty(input))
+            {
+                Console.WriteLine("empty string not allowed");
+                continue;
+            };
+            CommandResult commandResult = _consoleUI.ParseCommand(input);
+            if (!commandResult.IsCommand)
+            {
+                Console.WriteLine("not a command");
+                continue;
+            }
 
             // Temporary basic command handling - replace with full implementation
-            switch (input.ToLower())
-            {
-                case "/quit":
-                case "/exit":
-                    running = false;
+            switch (commandResult.CommandType)
+            {   
+                case CommandType.Help:
+                    _consoleUI.ShowHelp();
                     break;
-                case "/help":
-                    ShowHelp();
+                case CommandType.Connect:
+                    Console.WriteLine("Connect command not yet implemented. See TODO comments.");
+                    break;
+                case CommandType.Listen:
+                    Console.WriteLine("Listen command not yet implemented. See TODO comments.");
+                    break;
+                case CommandType.ListPeers:
+                    Console.WriteLine("ListPeers command not yet implemented. See TODO comments.");
+                    break;
+                case CommandType.History:
+                    Console.WriteLine("History command not yet implemented. See TODO comments.");
+                    break; 
+                case CommandType.Quit:
+                    running = false;
                     break;
                 default:
                     Console.WriteLine("Command not yet implemented. See TODO comments.");
