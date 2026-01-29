@@ -77,7 +77,20 @@ public class TcpServer
     /// </summary>
     private void HandleNewConnection(TcpClient client)
     {
-        throw new NotImplementedException("Implement HandleNewConnection() - see TODO in comments above");
+        Peer peer = new Peer
+        {
+            Client = client,
+            Stream = client.GetStream(),
+            Address = ((IPEndPoint)client.Client.RemoteEndPoint!).Address,
+            Port = ((IPEndPoint)client.Client.RemoteEndPoint!).Port,
+            IsConnected = true
+        };
+        lock (_connectedPeers)
+        {
+            _connectedPeers.Add(peer);
+        }
+        OnPeerConnected?.Invoke(peer);
+        Thread receiveThread = new Thread(() => ReceiveLoop(peer));
     }
 
     /// <summary>

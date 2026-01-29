@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Matthew Luan
 // CSCI 251 - Secure Distributed Messenger
 // Group Project
 //
@@ -25,7 +25,7 @@ namespace SecureMessenger;
 ///    - Parses commands using ConsoleUI
 ///    - Dispatches commands to appropriate handlers
 ///
-/// 2. Listen Thread (Server)
+/// 2. Listen Thread (Server) 
 ///    - Runs TcpServer to accept incoming connections
 ///    - Each accepted connection spawns a receive thread
 ///
@@ -57,11 +57,11 @@ class Program
 {
     // TODO: Declare your components as fields if needed for access across methods
     // Examples:
-    // private static MessageQueue? _messageQueue;
-    // private static TcpServer? _tcpServer;
-    // private static TcpClientHandler? _tcpClientHandler;
-    // private static ConsoleUI? _consoleUI;
-    // private static CancellationTokenSource? _cancellationTokenSource;
+    private static MessageQueue? _messageQueue;
+    private static TcpServer? _tcpServer;
+    private static TcpClientHandler? _tcpClientHandler;
+    private static ConsoleUI? _consoleUI;
+    private static CancellationTokenSource? _cancellationTokenSource;
 
     static async Task Main(string[] args)
     {
@@ -75,16 +75,50 @@ class Program
         // 4. Create TcpServer for incoming connections
         // 5. Create TcpClientHandler for outgoing connections
 
+        _cancellationTokenSource = new CancellationTokenSource();
+        _messageQueue = new MessageQueue();
+        _consoleUI = new ConsoleUI(_messageQueue);
+        _tcpServer = new TcpServer();
+        _tcpClientHandler = new TcpClientHandler();
+
         // TODO: Subscribe to events
         // 1. TcpServer.OnPeerConnected - handle new incoming connections
         // 2. TcpServer.OnMessageReceived - handle received messages
         // 3. TcpServer.OnPeerDisconnected - handle disconnections
         // 4. TcpClientHandler events (same pattern)
 
+        _tcpServer.OnPeerConnected += (peer) =>
+        {
+            _consoleUI.DisplaySystem($"Peer connected: {peer}");
+        };
+        _tcpServer.OnMessageReceived += (peer, message) =>
+        {
+            _consoleUI.DisplayMessage(message);
+        };
+        _tcpServer.OnPeerDisconnected += (peer) =>
+        {
+            _consoleUI.DisplaySystem($"Peer disconnected: {peer}");
+        };
+
+        _tcpClientHandler.OnConnected += (peer) =>
+        {
+            _consoleUI.DisplaySystem($"Connected to peer: {peer}");
+        };
+        _tcpClientHandler.OnMessageReceived += (peer, message) =>
+        {
+            _consoleUI.DisplayMessage(message);
+        };
+        _tcpClientHandler.OnDisconnected += (peer) =>
+        {
+            _consoleUI.DisplaySystem($"Disconnected from peer: {peer}");
+        };
+
         // TODO: Start background threads
         // 1. Start a thread/task for processing incoming messages
         // 2. Start a thread/task for sending outgoing messages
         // Note: TcpServer.Start() will create its own listen thread
+
+
 
         Console.WriteLine("Type /help for available commands");
         Console.WriteLine();
@@ -105,18 +139,37 @@ class Program
             //    - Quit: Set running = false
             //    - Not a command: Send as a message to peers
 
-            var input = Console.ReadLine();
-            if (string.IsNullOrEmpty(input)) continue;
+            // command parsing
+            string? input = Console.ReadLine();
+            if (string.IsNullOrEmpty(input))
+            {
+                Console.WriteLine("empty string not allowed");
+                continue;
+            };
+            CommandResult commandResult = _consoleUI.ParseCommand(input);
+            if (!commandResult.IsCommand)
+            {
+                Console.WriteLine("not a command");
+                continue;
+            }
 
             // Temporary basic command handling - replace with full implementation
-            switch (input.ToLower())
-            {
-                case "/quit":
-                case "/exit":
-                    running = false;
+            switch (commandResult.CommandType)
+            {   
+                case CommandType.Connect:
+                    Console.WriteLine("Connect command not yet implemented. See TODO comments.");
                     break;
-                case "/help":
-                    ShowHelp();
+                case CommandType.Listen:
+                    _tcpServer.Start(int.Parse(commandResult.Args[0]));
+                    break;
+                case CommandType.ListPeers:
+                    Console.WriteLine("ListPeers command not yet implemented. See TODO comments.");
+                    break;
+                case CommandType.History:
+                    Console.WriteLine("History command not yet implemented. See TODO comments.");
+                    break; 
+                case CommandType.Quit:
+                    running = false;
                     break;
                 default:
                     Console.WriteLine("Command not yet implemented. See TODO comments.");
