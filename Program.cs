@@ -152,21 +152,33 @@ class Program
                 Console.WriteLine("not a command");
                 continue;
             }
+            //  2. If it's a command, split by spaces and parse:
+    ///    - "/connect <ip> <port>" -> CommandType.Connect with Args = [ip, port]
+    ///    - "/listen <port>" -> CommandType.Listen with Args = [port]
+    ///    - "/peers" -> CommandType.ListPeers
+    ///    - "/history" -> CommandType.History
+    ///    - "/quit" or "/exit" -> CommandType.Quit
+    ///    - Unknown command -> CommandType.Unknown with error message
 
             // Temporary basic command handling - replace with full implementation
             switch (commandResult.CommandType)
             {   
                 case CommandType.Connect:
-                    Console.WriteLine("Connect command not yet implemented. See TODO comments.");
+                    _tcpClientHandler.ConnectAsync(commandResult.Args[0], int.Parse(commandResult.Args[1]));
                     break;
                 case CommandType.Listen:
                     _tcpServer.Start(int.Parse(commandResult.Args[0]));
                     break;
                 case CommandType.ListPeers:
-                    Console.WriteLine("ListPeers command not yet implemented. See TODO comments.");
+                    var peers = _tcpServer.GetConnectedPeers();
+                    Console.WriteLine("Connected Peers:");
+                    foreach (var peer in peers)
+                    {
+                        Console.WriteLine($"- {peer.ToString()}");
+                    }
                     break;
                 case CommandType.History:
-                    Console.WriteLine("History command not yet implemented. See TODO comments.");
+                    // _consoleUI.DisplayHistory();
                     break; 
                 case CommandType.Quit:
                     running = false;
