@@ -42,6 +42,14 @@ public class TcpServer
     /// </summary>
     public void Start(int port)
     {
+        Port = port;
+        _cancellationTokenSource = new CancellationTokenSource();
+        _listener = new TcpListener(IPAddress.Any, port);
+        _listener.Start();
+        IsListening = true;
+        _listenThread = new Thread(ListenLoop);
+        _listenThread.Start();
+        Console.WriteLine($"Server listening on port {port}");
         throw new NotImplementedException("Implement Start() - see TODO in comments above");
     }
 
@@ -58,6 +66,30 @@ public class TcpServer
     /// </summary>
     private void ListenLoop()
     {
+        while(!_cancellationTokenSource!.IsCancellationRequested)
+        {
+            try
+            {
+                if (_listener!.Pending())
+                {
+                    TcpClient client = _listener.AcceptTcpClient();
+                    HandleNewConnection(client);
+                }
+                else
+                {
+                    Thread.Sleep(100);
+                }
+            }
+            catch (SocketException ex)
+            {
+                Console.WriteLine($"SocketException in ListenLoop: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                Console.WriteLine($"IOException in ListenLoop: {ex.Message}");
+            }
+        }
+
         throw new NotImplementedException("Implement ListenLoop() - see TODO in comments above");
     }
 
@@ -108,6 +140,31 @@ public class TcpServer
     /// </summary>
     private void ReceiveLoop(Peer peer)
     {
+        StreamReader streamReader = new StreamReader(peer.Stream);
+        try
+        {while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
+            {
+                string? line = streamReader.ReadLine();
+                if (line == null)
+                {
+                    break;
+                }
+                Message message = new Message
+                {
+                    Content = line,
+                    Sender = peer.Name
+                };
+                OnMessageReceived?.Invoke(peer, message);
+            }
+        }
+        catch (IOException)
+        {
+            // Connection lost
+        }
+        finally
+        {
+            DisconnectPeer(peer);
+        }
         throw new NotImplementedException("Implement ReceiveLoop() - see TODO in comments above");
     }
 
@@ -122,6 +179,9 @@ public class TcpServer
     /// </summary>
     private void DisconnectPeer(Peer peer)
     {
+        peer.IsConnected = false;
+        peer.Stream?.Dispose();
+        peer.Client?.Dispose();
         throw new NotImplementedException("Implement DisconnectPeer() - see TODO in comments above");
     }
 
