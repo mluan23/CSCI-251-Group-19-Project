@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Aman Shah
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 1: Threading & Basic Networking
@@ -39,8 +39,9 @@ public class ConsoleUI
     /// </summary>
     public void DisplayMessage(Message message)
     {
-        throw new NotImplementedException("Implement DisplayMessage() - see TODO in comments above");
-    }
+        // Format timestamp as HH:mm:ss
+        string timestamp = message.Timestamp.ToString("HH:mm:ss");
+        Console.WriteLine($"[{timestamp}] {message.Sender}: {message.Content}");    }
 
     /// <summary>
     /// Display a system message to the console.
@@ -50,7 +51,7 @@ public class ConsoleUI
     /// </summary>
     public void DisplaySystem(string message)
     {
-        throw new NotImplementedException("Implement DisplaySystem() - see TODO in comments above");
+        Console.WriteLine($"[System] {message}");
     }
 
     /// <summary>
@@ -62,8 +63,13 @@ public class ConsoleUI
     /// </summary>
     public void ShowHelp()
     {
-        throw new NotImplementedException("Implement ShowHelp() - see TODO in comments above");
-    }
+        Console.WriteLine("Available commands:");
+        Console.WriteLine("  /connect <ip> <port>  - Connect to a peer");
+        Console.WriteLine("  /listen <port>        - Start listening for connections");
+        Console.WriteLine("  /peers                - List known peers");
+        Console.WriteLine("  /history              - View message history");
+        Console.WriteLine("  /quit or /exit        - Exit the application");
+        Console.WriteLine("  <any text>            - Send as a message");    }
 
     /// <summary>
     /// Parse user input and return a CommandResult.
@@ -85,7 +91,52 @@ public class ConsoleUI
     /// </summary>
     public CommandResult ParseCommand(string input)
     {
-        throw new NotImplementedException("Implement ParseCommand() - see TODO in comments above");
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return new CommandResult
+            {
+                IsCommand = false,
+                Message = string.Empty
+            };
+        }
+
+        if (!input.StartsWith("/"))
+        {
+            // Regular message
+            return new CommandResult
+            {
+                IsCommand = false,
+                Message = input
+            };
+        }
+
+        string[] parts = input.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        string cmd = parts[0].ToLower();
+        string[] args = parts.Length > 1 ? parts[1..] : Array.Empty<string>();
+
+        CommandType commandType = cmd switch
+        {
+            "/connect" => CommandType.Connect,
+            "/listen" => CommandType.Listen,
+            "/peers" => CommandType.ListPeers,
+            "/history" => CommandType.History,
+            "/quit" or "/exit" => CommandType.Quit,
+            _ => CommandType.Unknown
+        };
+
+        string? message = null;
+        if (commandType == CommandType.Unknown)
+        {
+            message = $"Unknown command: {input}";
+        }
+
+        return new CommandResult
+        {
+            IsCommand = true,
+            CommandType = commandType,
+            Args = args,
+            Message = message
+        };
     }
 }
 
