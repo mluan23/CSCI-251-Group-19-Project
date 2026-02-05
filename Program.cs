@@ -171,6 +171,9 @@ class Program
                 case CommandType.Quit:
                     running = false;
                     break;
+                case CommandType.Help:
+                    ShowHelp();
+                    break;
                 default:
                     Console.WriteLine("Command not yet implemented. See TODO comments.");
                     break;
