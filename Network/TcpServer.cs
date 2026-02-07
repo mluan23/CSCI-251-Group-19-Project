@@ -22,6 +22,8 @@ public class TcpServer
     private CancellationTokenSource? _cancellationTokenSource;
     private Thread? _listenThread;
 
+    private readonly object _lock = new();
+
     public event Action<Peer>? OnPeerConnected;
     public event Action<Peer>? OnPeerDisconnected;
     public event Action<Peer, Message>? OnMessageReceived;
@@ -42,6 +44,14 @@ public class TcpServer
     /// </summary>
     public void Start(int port)
     {
+        Port = port;
+        _cancellationTokenSource = new CancellationTokenSource();
+        _listener = new TcpListener(IPAddress.Any, port);
+        _listener.Start();
+        IsListening = true;
+        _listenThread = new Thread(ListenLoop);
+        _listenThread.Start();
+        Console.WriteLine($"Server listening on port {port}");
         throw new NotImplementedException("Implement Start() - see TODO in comments above");
     }
 
@@ -58,6 +68,30 @@ public class TcpServer
     /// </summary>
     private void ListenLoop()
     {
+        while(!_cancellationTokenSource!.IsCancellationRequested)
+        {
+            try
+            {
+                if (_listener!.Pending())
+                {
+                    TcpClient client = _listener.AcceptTcpClient();
+                    HandleNewConnection(client);
+                }
+                else
+                {
+                    Thread.Sleep(100);
+                }
+            }
+            catch (SocketException ex)
+            {
+                Console.WriteLine($"SocketException in ListenLoop: {ex.Message}");
+            }
+            catch (IOException ex)
+            {
+                Console.WriteLine($"IOException in ListenLoop: {ex.Message}");
+            }
+        }
+
         throw new NotImplementedException("Implement ListenLoop() - see TODO in comments above");
     }
 
@@ -85,7 +119,7 @@ public class TcpServer
             Port = ((IPEndPoint)client.Client.RemoteEndPoint!).Port,
             IsConnected = true
         };
-        lock (_connectedPeers)
+        lock (_lock)
         {
             _connectedPeers.Add(peer);
         }
@@ -108,7 +142,31 @@ public class TcpServer
     /// </summary>
     private void ReceiveLoop(Peer peer)
     {
-        throw new NotImplementedException("Implement ReceiveLoop() - see TODO in comments above");
+        StreamReader streamReader = new StreamReader(peer.Stream);
+        try
+        {while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
+            {
+                string? line = streamReader.ReadLine();
+                if (line == null)
+                {
+                    break;
+                }
+                Message message = new Message
+                {
+                    Content = line,
+                    Sender = peer.Name
+                };
+                OnMessageReceived?.Invoke(peer, message);
+            }
+        }
+        catch (IOException)
+        {
+            // Connection lost
+        }
+        finally
+        {
+            DisconnectPeer(peer);
+        }
     }
 
     /// <summary>
@@ -122,7 +180,14 @@ public class TcpServer
     /// </summary>
     private void DisconnectPeer(Peer peer)
     {
-        throw new NotImplementedException("Implement DisconnectPeer() - see TODO in comments above");
+        peer.IsConnected = false;
+        peer.Stream?.Dispose();
+        peer.Client?.Dispose();
+        lock (_lock)
+        {
+            _connectedPeers.Remove(peer);
+        }
+        OnPeerDisconnected?.Invoke(peer);
     }
 
     /// <summary>
@@ -137,7 +202,17 @@ public class TcpServer
     /// </summary>
     public void Stop()
     {
-        throw new NotImplementedException("Implement Stop() - see TODO in comments above");
+        _cancellationTokenSource?.Cancel();
+        _listener?.Stop();
+        IsListening = false;
+        lock (_lock)
+        {
+            foreach (var peer in _connectedPeers.ToList())
+            {
+                DisconnectPeer(peer);
+            }
+        }
+        _listenThread?.Join(1000);
     }
 
     /// <summary>
@@ -146,9 +221,9 @@ public class TcpServer
     /// </summary>
     public IEnumerable<Peer> GetConnectedPeers()
     {
-        lock (_connectedPeers)
+        lock (_lock)
         {
-            return _connectedPeers.ToList();
+            return _connectedPeers;
         }
     }
 }
