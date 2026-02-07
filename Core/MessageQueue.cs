@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Group 19
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 1: Threading & Basic Networking
@@ -31,6 +31,8 @@ public class MessageQueue
     // Option 1: BlockingCollection<Message> (recommended)
     // Option 2: ConcurrentQueue<Message>
     // Option 3: Queue<Message> with lock
+    BlockingCollection<Message> incomingQueue = new BlockingCollection<Message>(100);
+    BlockingCollection<Message> outgoingQueue = new BlockingCollection<Message>(100);
 
     /// <summary>
     /// Enqueue an incoming message (received from network).
@@ -39,9 +41,10 @@ public class MessageQueue
     /// 1. Add the message to your incoming queue
     /// 2. Ensure thread safety (depends on your collection choice)
     /// </summary>
+    
     public void EnqueueIncoming(Message message)
     {
-        throw new NotImplementedException("Implement EnqueueIncoming() - see TODO in comments above");
+        incomingQueue.Add(message);
     }
 
     /// <summary>
@@ -57,7 +60,17 @@ public class MessageQueue
     /// </summary>
     public Message DequeueIncoming(CancellationToken cancellationToken = default)
     {
-        throw new NotImplementedException("Implement DequeueIncoming() - see TODO in comments above");
+        try
+        {
+            return incomingQueue.Take(cancellationToken);
+            
+        } catch (OperationCanceledException)
+        {
+            Console.WriteLine("Dequeuing incoming message was cancelled.");
+            throw;
+        }
+
+        //throw new NotImplementedException("Implement DequeueIncoming() - see TODO in comments above");
     }
 
     /// <summary>
@@ -72,7 +85,9 @@ public class MessageQueue
     /// </summary>
     public bool TryDequeueIncoming(out Message? message)
     {
-        throw new NotImplementedException("Implement TryDequeueIncoming() - see TODO in comments above");
+        return incomingQueue.TryTake(out message);
+
+        //throw new NotImplementedException("Implement TryDequeueIncoming() - see TODO in comments above");
     }
 
     /// <summary>
@@ -84,7 +99,9 @@ public class MessageQueue
     /// </summary>
     public void EnqueueOutgoing(Message message)
     {
-        throw new NotImplementedException("Implement EnqueueOutgoing() - see TODO in comments above");
+        outgoingQueue.Add(message);
+
+        //throw new NotImplementedException("Implement EnqueueOutgoing() - see TODO in comments above");
     }
 
     /// <summary>
@@ -98,6 +115,15 @@ public class MessageQueue
     /// </summary>
     public Message DequeueOutgoing(CancellationToken cancellationToken = default)
     {
+        try
+        {
+            return outgoingQueue.Take(cancellationToken);
+            
+        } catch (OperationCanceledException)
+        {
+            Console.WriteLine("Dequeuing outgoing message was cancelled.");
+            throw;
+        }
         throw new NotImplementedException("Implement DequeueOutgoing() - see TODO in comments above");
     }
 
@@ -106,14 +132,14 @@ public class MessageQueue
     ///
     /// TODO: Return the count of your incoming queue
     /// </summary>
-    public int IncomingCount => throw new NotImplementedException("Implement IncomingCount property");
+    public int IncomingCount => incomingQueue.Count; //throw new NotImplementedException("Implement IncomingCount property");
 
     /// <summary>
     /// Get the count of outgoing messages waiting to be sent.
     ///
     /// TODO: Return the count of your outgoing queue
     /// </summary>
-    public int OutgoingCount => throw new NotImplementedException("Implement OutgoingCount property");
+    public int OutgoingCount => outgoingQueue.Count; //throw new NotImplementedException("Implement OutgoingCount property");
 
     /// <summary>
     /// Signal that no more messages will be added.
@@ -126,6 +152,8 @@ public class MessageQueue
     /// </summary>
     public void CompleteAdding()
     {
-        throw new NotImplementedException("Implement CompleteAdding() - see TODO in comments above");
+        incomingQueue.CompleteAdding();
+        outgoingQueue.CompleteAdding();
+        //throw new NotImplementedException("Implement CompleteAdding() - see TODO in comments above");
     }
 }
