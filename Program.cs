@@ -178,7 +178,7 @@ class Program
                     }
                     break;
                 case CommandType.History:
-                    // _consoleUI.DisplayHistory();
+                    _consoleUI.DisplayHistory();
                     break; 
                 case CommandType.Quit:
                     running = false;

@@ -91,7 +91,6 @@ public class TcpServer
             }
         }
 
-        throw new NotImplementedException("Implement ListenLoop() - see TODO in comments above");
     }
 
     /// <summary>
