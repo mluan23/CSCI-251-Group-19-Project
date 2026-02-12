@@ -121,6 +121,7 @@ public class ConsoleUI
             "/peers" => CommandType.ListPeers,
             "/history" => CommandType.History,
             "/quit" or "/exit" => CommandType.Quit,
+            "/help" => CommandType.Help,
             _ => CommandType.Unknown
         };
 
