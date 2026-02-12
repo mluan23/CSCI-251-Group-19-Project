@@ -53,7 +53,7 @@ public class TcpClientHandler
                 Stream = client.GetStream(),
                 Address = IPAddress.Parse(host),
                 Port = port,
-                IsConnnected = true
+                IsConnected = true
             };
             lock (_lock)
             {
@@ -109,7 +109,7 @@ public class TcpClientHandler
         }
         finally
         {
-            Disconnect(peer);
+            Disconnect(peer.Id);
         }
     }
 
