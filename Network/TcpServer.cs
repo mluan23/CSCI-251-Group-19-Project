@@ -52,7 +52,6 @@ public class TcpServer
         _listenThread = new Thread(ListenLoop);
         _listenThread.Start();
         Console.WriteLine($"Server listening on port {port}");
-        throw new NotImplementedException("Implement Start() - see TODO in comments above");
     }
 
     /// <summary>
