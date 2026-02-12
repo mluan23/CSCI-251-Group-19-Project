@@ -7,6 +7,7 @@
 
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using SecureMessenger.Core;
 
 namespace SecureMessenger.Network;
@@ -47,6 +48,7 @@ public class TcpClientHandler
         {
             TcpClient client = new TcpClient();
             await client.ConnectAsync(host, port);
+            Console.WriteLine("Establishing Connection..");
             var peer = new Peer
             {
                 Client = client,

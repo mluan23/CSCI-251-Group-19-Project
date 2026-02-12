@@ -164,7 +164,7 @@ class Program
             switch (commandResult.CommandType)
             {   
                 case CommandType.Connect:
-                    _tcpClientHandler.ConnectAsync(commandResult.Args[0], int.Parse(commandResult.Args[1]));
+                    await _tcpClientHandler.ConnectAsync(commandResult.Args[0], int.Parse(commandResult.Args[1]));
                     break;
                 case CommandType.Listen:
                     _tcpServer.Start(int.Parse(commandResult.Args[0]));
@@ -178,7 +178,8 @@ class Program
                     }
                     break;
                 case CommandType.History:
-                    _consoleUI.DisplayHistory();
+                    // DisplayHistory() needs to be implemented during Sprint 3
+                    //_consoleUI.DisplayHistory();
                     break; 
                 case CommandType.Quit:
                     running = false;
