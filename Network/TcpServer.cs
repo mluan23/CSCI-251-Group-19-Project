@@ -123,6 +123,7 @@ public class TcpServer
         }
         OnPeerConnected?.Invoke(peer);
         Thread receiveThread = new Thread(() => ReceiveLoop(peer));
+        receiveThread.Start();
     }
 
     /// <summary>
@@ -221,7 +222,7 @@ public class TcpServer
     {
         lock (_lock)
         {
-            return _connectedPeers;
+            return _connectedPeers.ToList();
         }
     }
 }
