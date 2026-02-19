@@ -188,7 +188,7 @@ class Program
                     ShowHelp();
                     break;
                 default:
-                    Console.WriteLine("Command not yet implemented. See TODO comments.");
+                    Console.WriteLine("not a command");
                     break;
             }
         }
