@@ -149,7 +149,6 @@ class Program
             CommandResult commandResult = _consoleUI.ParseCommand(input);
             if (!commandResult.IsCommand)
             {
-                Console.WriteLine("not a command");
                 continue;
             }
             //  2. If it's a command, split by spaces and parse:
@@ -188,7 +187,7 @@ class Program
                     ShowHelp();
                     break;
                 default:
-                    Console.WriteLine("Command not yet implemented. See TODO comments.");
+                    Console.WriteLine("not a command");
                     break;
             }
         }
