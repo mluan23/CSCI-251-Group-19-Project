@@ -149,7 +149,7 @@ class Program
             CommandResult commandResult = _consoleUI.ParseCommand(input);
             if (!commandResult.IsCommand)
             {
-                Console.WriteLine("not a command");
+                await _tcpClientHandler.BroadcastAsync(commandResult.Message!);
                 continue;
             }
             //  2. If it's a command, split by spaces and parse:
