@@ -89,30 +89,29 @@ class Program
 
         _tcpServer.OnPeerConnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Peer connected: {peer.Name}");
+            _consoleUI.DisplaySystem($"Peer connected: {peer}");
         };
         _tcpServer.OnMessageReceived += (peer, message) =>
         {
+            message.Sender = peer.Port.ToString();
             _consoleUI.DisplayMessage(message);
-            _tcpClientHandler.BroadcastAsync(message.Content);
+            _tcpServer.BroadcastAsync(message.Content);
 
         };
         _tcpServer.OnPeerDisconnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Peer disconnected: {peer.Name}");
+            _consoleUI.DisplaySystem($"Peer disconnected: {peer}");
         };
 
         _tcpClientHandler.OnConnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Connected to peer: {peer.Name}");
+            _consoleUI.DisplaySystem($"Connected to peer: {peer}");
         };
         _tcpClientHandler.OnMessageReceived += (peer, message) =>
         {   
             
             message.Sender = peer.Name;
             _consoleUI.DisplayMessage(message);
-            _tcpClientHandler.BroadcastAsync(message.Content);
-
 
         };
         _tcpClientHandler.OnDisconnected += (peer) =>
@@ -157,7 +156,7 @@ class Program
             if (!commandResult.IsCommand)
             {
                 await _tcpClientHandler.BroadcastAsync(commandResult.Message!);
-                await _tcpServer.BroadcastAsync(commandResult.Message!);
+                //await _tcpServer.BroadcastAsync(commandResult.Message!);
                 continue;
             }
             //  2. If it's a command, split by spaces and parse:

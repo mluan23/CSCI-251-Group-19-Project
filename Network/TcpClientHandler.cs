@@ -51,6 +51,9 @@ public class TcpClientHandler
             TcpClient client = new TcpClient();
             await client.ConnectAsync(host, port);
             Console.WriteLine("Establishing Connection..");
+            Console.WriteLine("What is your name?");
+            string? input;
+            input = Console.ReadLine();
             var peer = new Peer
             {
                 Client = client,
@@ -58,7 +61,7 @@ public class TcpClientHandler
                 Address = IPAddress.Parse(host),
                 Port = port,
                 IsConnected = true,
-                Name = $"Peer {_connections.Count + 1}"
+                Name = input
             };
             lock (_lock)
             {

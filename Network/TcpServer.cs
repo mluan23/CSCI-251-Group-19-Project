@@ -115,8 +115,7 @@ public class TcpServer
             Stream = client.GetStream(),
             Address = ((IPEndPoint)client.Client.RemoteEndPoint!).Address,
             Port = ((IPEndPoint)client.Client.RemoteEndPoint!).Port,
-            IsConnected = true,
-            Name = $"Peer {_connectedPeers.Count + 1}"
+            IsConnected = true
         };
         lock (_lock)
         {
