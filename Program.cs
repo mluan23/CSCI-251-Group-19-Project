@@ -89,24 +89,31 @@ class Program
 
         _tcpServer.OnPeerConnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Peer connected: {peer}");
+            _consoleUI.DisplaySystem($"Peer connected: {peer.Name}");
         };
         _tcpServer.OnMessageReceived += (peer, message) =>
         {
             _consoleUI.DisplayMessage(message);
+            _tcpClientHandler.BroadcastAsync(message.Content);
+
         };
         _tcpServer.OnPeerDisconnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Peer disconnected: {peer}");
+            _consoleUI.DisplaySystem($"Peer disconnected: {peer.Name}");
         };
 
         _tcpClientHandler.OnConnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Connected to peer: {peer}");
+            _consoleUI.DisplaySystem($"Connected to peer: {peer.Name}");
         };
         _tcpClientHandler.OnMessageReceived += (peer, message) =>
-        {
+        {   
+            
+            message.Sender = peer.Name;
             _consoleUI.DisplayMessage(message);
+            _tcpClientHandler.BroadcastAsync(message.Content);
+
+
         };
         _tcpClientHandler.OnDisconnected += (peer) =>
         {

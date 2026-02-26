@@ -9,6 +9,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using SecureMessenger.Core;
+using System.Collections.Concurrent;
+
 
 namespace SecureMessenger.Network;
 
@@ -17,7 +19,7 @@ namespace SecureMessenger.Network;
 /// </summary>
 public class TcpClientHandler
 {
-    private readonly Dictionary<string, Peer> _connections = new();
+    private readonly ConcurrentDictionary<string, Peer> _connections = new();
     private readonly object _lock = new();
 
     public event Action<Peer>? OnConnected;
@@ -55,7 +57,8 @@ public class TcpClientHandler
                 Stream = client.GetStream(),
                 Address = IPAddress.Parse(host),
                 Port = port,
-                IsConnected = true
+                IsConnected = true,
+                Name = $"Peer {_connections.Count + 1}"
             };
             lock (_lock)
             {
