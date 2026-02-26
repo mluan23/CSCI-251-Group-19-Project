@@ -216,6 +216,34 @@ public class TcpServer
     }
 
     /// <summary>
+    /// Broadcast a message to all peers connected to this server.
+    /// </summary>
+    public async Task BroadcastAsync(string message)
+    {
+        List<Peer> peers;
+        lock (_lock)
+        {
+            peers = _connectedPeers.ToList();
+        }
+        foreach (var peer in peers)
+        {
+            if (peer.IsConnected && peer.Stream != null)
+            {
+                try
+                {
+                    using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
+                    await writer.WriteLineAsync(message);
+                    await writer.FlushAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to send to {peer.Address}: {ex.Message}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Get a list of currently connected peers.
     /// Remember to use proper locking when accessing _connectedPeers.
     /// </summary>

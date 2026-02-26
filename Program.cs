@@ -157,6 +157,7 @@ class Program
             if (!commandResult.IsCommand)
             {
                 await _tcpClientHandler.BroadcastAsync(commandResult.Message!);
+                await _tcpServer.BroadcastAsync(commandResult.Message!);
                 continue;
             }
             //  2. If it's a command, split by spaces and parse:
