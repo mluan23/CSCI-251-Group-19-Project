@@ -49,11 +49,11 @@ public class TcpClientHandler
         try
         {
             TcpClient client = new TcpClient();
-            await client.ConnectAsync(host, port);
             Console.WriteLine("Establishing Connection..");
             Console.WriteLine("What is your name?");
             string? input;
             input = Console.ReadLine();
+            await client.ConnectAsync(host, port);
             var peer = new Peer
             {
                 Client = client,
@@ -67,7 +67,6 @@ public class TcpClientHandler
             {
                 _connections[host] = peer;
             }
-            OnConnected.Invoke(peer);
             _ = Task.Run(() => ReceiveLoop(peer)); // run for lifetime of connection
             return true;
         }
@@ -103,11 +102,7 @@ public class TcpClientHandler
                 {
                     break;
                 }
-                var message = new Message()
-                {
-                    Content = line,
-                    Sender = peer.Address.ToString()
-                };
+                Message message = System.Text.Json.JsonSerializer.Deserialize<Message>(line);
                 OnMessageReceived.Invoke(peer, message);
             }
         }

@@ -108,7 +108,7 @@ public class TcpServer
     /// 4. Create and start a new Thread running ReceiveLoop for this peer
     /// </summary>
     private void HandleNewConnection(TcpClient client)
-    {
+    {   
         Peer peer = new Peer
         {
             Client = client,
@@ -117,12 +117,15 @@ public class TcpServer
             Port = ((IPEndPoint)client.Client.RemoteEndPoint!).Port,
             IsConnected = true
         };
+        StreamReader streamReader = new StreamReader(peer.Stream);
+        string? name = streamReader.ReadLine();
+        peer.Name = name;
         lock (_lock)
         {
             _connectedPeers.Add(peer);
         }
         OnPeerConnected?.Invoke(peer);
-        Thread receiveThread = new Thread(() => ReceiveLoop(peer));
+        Thread receiveThread = new Thread(() => ReceiveLoop(peer, streamReader));
         receiveThread.Start();
     }
 
@@ -139,9 +142,9 @@ public class TcpServer
     /// 7. Handle IOException (connection lost)
     /// 8. In finally block, call DisconnectPeer
     /// </summary>
-    private void ReceiveLoop(Peer peer)
+    private void ReceiveLoop(Peer peer, StreamReader streamReader)
     {
-        StreamReader streamReader = new StreamReader(peer.Stream);
+
         try
         {while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
             {
@@ -217,7 +220,7 @@ public class TcpServer
     /// <summary>
     /// Broadcast a message to all peers connected to this server.
     /// </summary>
-    public async Task BroadcastAsync(string message)
+    public async Task BroadcastAsync(Message message)
     {
         List<Peer> peers;
         lock (_lock)
@@ -231,7 +234,8 @@ public class TcpServer
                 try
                 {
                     using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
-                    await writer.WriteLineAsync(message);
+                    string json = System.Text.Json.JsonSerializer.Serialize(message);
+                    await writer.WriteLineAsync(json);
                     await writer.FlushAsync();
                 }
                 catch (Exception ex)
