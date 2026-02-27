@@ -111,7 +111,7 @@ class Program
         };
         _tcpClientHandler.OnDisconnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Disconnected from peer: {peer.Name}");
+            _consoleUI.DisplaySystem($"Disconnected from server: {peer.Name}");
         };
 
         // TODO: Start background threads
@@ -212,7 +212,12 @@ class Program
         // 4. Complete the MessageQueue
         // 5. Wait for background threads to finish
         _cancellationTokenSource.Cancel();
+        var peersToDisconnect = _tcpServer.GetConnectedPeers();
         _tcpServer.Stop();
+        foreach(var peer in peersToDisconnect)
+        {
+            _tcpClientHandler.Disconnect(peer.Id);
+        }
         Console.WriteLine("Goodbye!");
     }
 
