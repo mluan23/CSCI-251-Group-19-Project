@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Group 19
 // CSCI 251 - Secure Distributed Messenger
 //
 // PROVIDED - No implementation required

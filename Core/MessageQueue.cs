@@ -1,4 +1,4 @@
-// Group 19
+// Jordany Roman Gonzalez
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 1: Threading & Basic Networking

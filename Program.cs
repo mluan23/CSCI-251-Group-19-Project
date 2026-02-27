@@ -95,18 +95,15 @@ class Program
         {
             message.Sender = peer.Name;
             _consoleUI.DisplayMessage(message);
-            Console.WriteLine(message.Sender);
             _tcpServer.BroadcastAsync(message);
-
         };
         _tcpServer.OnPeerDisconnected += (peer) =>
         {
             _consoleUI.DisplaySystem($"Peer disconnected: {peer.Name}");
         };
-
         _tcpClientHandler.OnConnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Connected to peer: {peer}");
+            _consoleUI.DisplaySystem("Connected to server.\nWhat is your name?");
         };
         _tcpClientHandler.OnMessageReceived += (peer, message) =>
         {   
@@ -114,7 +111,7 @@ class Program
         };
         _tcpClientHandler.OnDisconnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Disconnected from peer: {peer}");
+            _consoleUI.DisplaySystem($"Disconnected from peer: {peer.Name}");
         };
 
         // TODO: Start background threads
@@ -145,14 +142,24 @@ class Program
 
             // command parsing
             string? input = Console.ReadLine();
-            if (string.IsNullOrEmpty(input))
+            // add it so the empty str msg not printed when someone disconnects
+            if (input == null)
             {
-                Console.WriteLine("empty string not allowed");
+                continue;
+            }
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                Console.WriteLine("Empty message not allowed.");
                 continue;
             };
             CommandResult commandResult = _consoleUI.ParseCommand(input);
             if (!commandResult.IsCommand)
             {
+                if (!_tcpClientHandler.GetConnectedPeers().Any())
+                {
+                    Console.WriteLine("Join a chat to send messages.");
+                    continue;
+                }
                 await _tcpClientHandler.BroadcastAsync(commandResult.Message!);
                 //await _tcpServer.BroadcastAsync(commandResult.Message!);
                 continue;
@@ -179,7 +186,7 @@ class Program
                     Console.WriteLine("Connected Peers:");
                     foreach (var peer in peers)
                     {
-                        Console.WriteLine($"- {peer.ToString()}");
+                        Console.WriteLine($"- {peer.Name}");
                     }
                     break;
                 case CommandType.History:
@@ -204,7 +211,8 @@ class Program
         // 3. Disconnect all clients
         // 4. Complete the MessageQueue
         // 5. Wait for background threads to finish
-
+        _cancellationTokenSource.Cancel();
+        _tcpServer.Stop();
         Console.WriteLine("Goodbye!");
     }
 

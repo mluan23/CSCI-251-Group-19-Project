@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Matthew Luan
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 1: Threading & Basic Networking
@@ -51,7 +51,7 @@ public class TcpServer
         IsListening = true;
         _listenThread = new Thread(ListenLoop);
         _listenThread.Start();
-        Console.WriteLine($"Server listening on port {port}");
+        Console.WriteLine($"Server listening on port {port}.");
     }
 
     /// <summary>
@@ -117,15 +117,11 @@ public class TcpServer
             Port = ((IPEndPoint)client.Client.RemoteEndPoint!).Port,
             IsConnected = true
         };
-        StreamReader streamReader = new StreamReader(peer.Stream);
-        string? name = streamReader.ReadLine();
-        peer.Name = name;
         lock (_lock)
         {
             _connectedPeers.Add(peer);
         }
-        OnPeerConnected?.Invoke(peer);
-        Thread receiveThread = new Thread(() => ReceiveLoop(peer, streamReader));
+        Thread receiveThread = new Thread(() => ReceiveLoop(peer));
         receiveThread.Start();
     }
 
@@ -142,11 +138,16 @@ public class TcpServer
     /// 7. Handle IOException (connection lost)
     /// 8. In finally block, call DisconnectPeer
     /// </summary>
-    private void ReceiveLoop(Peer peer, StreamReader streamReader)
+    private void ReceiveLoop(Peer peer)
     {
-
+        // make the user enter their name here so the server thread not blocked
+        StreamReader streamReader = new StreamReader(peer.Stream);
+        string? name = streamReader.ReadLine();
+        peer.Name = name;
+        OnPeerConnected?.Invoke(peer);
         try
-        {while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
+        {
+            while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
             {
                 string? line = streamReader.ReadLine();
                 if (line == null)
@@ -163,7 +164,7 @@ public class TcpServer
         }
         catch (IOException)
         {
-            // Connection lost
+            Console.WriteLine($"Connection lost with the server. Please reconnect.");
         }
         finally
         {

@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Aveinn Swar
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 1: Threading & Basic Networking
@@ -49,10 +49,7 @@ public class TcpClientHandler
         try
         {
             TcpClient client = new TcpClient();
-            Console.WriteLine("Establishing Connection..");
-            Console.WriteLine("What is your name?");
-            string? input;
-            input = Console.ReadLine();
+            Console.WriteLine("Establishing Connection...");
             await client.ConnectAsync(host, port);
             var peer = new Peer
             {
@@ -61,12 +58,12 @@ public class TcpClientHandler
                 Address = IPAddress.Parse(host),
                 Port = port,
                 IsConnected = true,
-                Name = input
             };
             lock (_lock)
             {
                 _connections[host] = peer;
             }
+            OnConnected?.Invoke(peer);
             _ = Task.Run(() => ReceiveLoop(peer)); // run for lifetime of connection
             return true;
         }
