@@ -168,6 +168,7 @@ public class TcpServer
         }
         finally
         {
+            DisconnectPeer(peer);
         }
     }
 
