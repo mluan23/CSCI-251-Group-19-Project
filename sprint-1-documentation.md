@@ -4,10 +4,10 @@
 **Team Name:** Group 19
 
 **Team Members:**
-- Aveinn Swar - [Role/Responsibilities]
-- Matthew Luan - [Role/Responsibilities]
-- Aman Shah - [Role/Responsibilities]
-- Jordany Roman - [Role/Responsibilities]
+- Aveinn Swar - Implemented the TcpClientHandler and did some documentation
+- Matthew Luan - Implemented the TcpServer, Program, various bug fixes, and documentation
+- Aman Shah - Implemented the console UI and various bug fixes
+- Jordany Roman - Implemented the MessageQueue (not needed for this sprint), and did various bug fixes
 
 **Date:** 2/27/26
 
@@ -35,7 +35,7 @@ dotnet run
 ### Command Line Arguments (if any)
 | Argument | Description | Example |
 |----------|-------------|---------|
-| | | |
+None.
 
 ---
 
@@ -43,24 +43,23 @@ dotnet run
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `/connect <ip> <port>` | Connect to a peer | `/connect 192.168.1.100 5000` |
-| `/listen <port>` | Start listening for connections | `/listen 5000` |
+| `/connect <ip> <port>` | Connect to a peer | `/connect 127.0.0.1 5001` |
+| `/listen <port>` | Start listening for connections | `/listen 5001` |
 | `/peers` | List known peers | `/peers` |
-| `/history` | View message history | `/history` |
-| `/quit` | Exit the application | `/quit` |
-| `/exit` | Exit the application | `/exit` |
-| | | |
+| `/quit` | Exit/disconnect the application | `/quit` |
+| `/help` | Prints a message listing the commands | `/help` |
 
 ---
 
 ## Architecture Overview
 
+### Client-Server Architecture
+An instance is set as the server, and each other instance acts as a client and connects to that server. The clients send messages, which get sent to the server, then the server broadcasts those messages to all connected clients.
+
 ### Threading Model
-[Describe your threading approach - which threads exist and what each does]
 
 - **Main Thread:** The thread handles the UI, command inputs, and the overall application. It interacts with the MessageQueue to put outgoing messages in the queue and dequeues incoming messages to display them.
 - **Receive Thread:** The thread is created for every incoming connection. The thread executes the ReceiveLoop, which blocks and waits for data from peers. The network stream is monitored for incoming messages and continues without blocking other application operations.
-- **Send Thread:** The thread writes data to network streams and ensures that sending a message or broadcasting to many peers does not freeze the calling thread.
 - **Listen Thread:** The thread monitors for new incoming connection requests.
 
 ### Thread-Safe Message Queue
@@ -70,13 +69,13 @@ The MessageQueue is implemented as a thread-safe producer-consumer buffer using 
 
 ## Features Implemented
 
-- [ ] Multi-threaded architecture
-- [ ] Thread-safe message queue
-- [ ] TCP server (listen for connections)
-- [ ] TCP client (connect to peers)
-- [ ] Send/receive text messages
-- [ ] Graceful disconnection handling
-- [ ] Console UI with commands
+- [X] Multi-threaded architecture
+- [X] Thread-safe message queue
+- [X] TCP server (listen for connections)
+- [X] TCP client (connect to peers)
+- [X] Send/receive text messages
+- [X] Graceful disconnection handling
+- [X] Console UI with commands
 
 ---
 
@@ -85,10 +84,10 @@ The MessageQueue is implemented as a thread-safe producer-consumer buffer using 
 ### Test Cases
 | Test | Expected Result | Actual Result | Pass/Fail |
 |------|-----------------|---------------|-----------|
-| Two instances can connect | Connection established | | |
-| Messages sent and received | Message appears on other instance | | |
-| Disconnection handled | No crash, appropriate message | | |
-| Thread safety under load | No race conditions | | |
+| Client can connect to server | Connection established | Connection established | Pass |
+| Messages sent and received | Message appears on other instance | Message appears on other instance | Pass |
+| Disconnection handled | No crash, appropriate message | Disconnection Message | Pass |
+| Thread safety under load | No race conditions | No race conditions | Pass |
 
 ---
 
@@ -96,15 +95,15 @@ The MessageQueue is implemented as a thread-safe producer-consumer buffer using 
 
 | Issue | Description | Workaround |
 |-------|-------------|------------|
-| | | |
+None for now.
 
 ---
 
 ## Video Demo Checklist
 
 Your demo video (3-5 minutes) should show:
-- [ ] Starting two instances of the application
-- [ ] Connecting the instances
+- [ ] Starting three instances of the application
+- [ ] Connecting two client instances to the server
 - [ ] Sending messages in both directions
 - [ ] Disconnecting gracefully
 - [ ] (Optional) Showing thread-safe behavior under load

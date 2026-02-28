@@ -105,7 +105,7 @@ public class TcpClientHandler
         }
         catch (IOException ex)
         {
-            Console.WriteLine($"Connection lost with {peer.Address}: {ex.Message}");
+            
         }
         finally
         {

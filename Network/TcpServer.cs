@@ -142,11 +142,11 @@ public class TcpServer
     {
         // make the user enter their name here so the server thread not blocked
         StreamReader streamReader = new StreamReader(peer.Stream);
+        try
+        {
         string? name = streamReader.ReadLine();
         peer.Name = name;
         OnPeerConnected?.Invoke(peer);
-        try
-        {
             while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
             {
                 string? line = streamReader.ReadLine();
@@ -164,11 +164,10 @@ public class TcpServer
         }
         catch (IOException)
         {
-            Console.WriteLine($"Connection lost with the server. Please reconnect.");
+            
         }
         finally
         {
-            DisconnectPeer(peer);
         }
     }
 

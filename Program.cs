@@ -68,24 +68,11 @@ class Program
         Console.WriteLine("Secure Distributed Messenger");
         Console.WriteLine("============================");
 
-        // TODO: Initialize components
-        // 1. Create CancellationTokenSource for shutdown signaling
-        // 2. Create MessageQueue for thread communication
-        // 3. Create ConsoleUI for user interface
-        // 4. Create TcpServer for incoming connections
-        // 5. Create TcpClientHandler for outgoing connections
-
         _cancellationTokenSource = new CancellationTokenSource();
         _messageQueue = new MessageQueue();
         _consoleUI = new ConsoleUI(_messageQueue);
         _tcpServer = new TcpServer();
         _tcpClientHandler = new TcpClientHandler();
-
-        // TODO: Subscribe to events
-        // 1. TcpServer.OnPeerConnected - handle new incoming connections
-        // 2. TcpServer.OnMessageReceived - handle received messages
-        // 3. TcpServer.OnPeerDisconnected - handle disconnections
-        // 4. TcpClientHandler events (same pattern)
 
         _tcpServer.OnPeerConnected += (peer) =>
         {
@@ -94,7 +81,7 @@ class Program
         _tcpServer.OnMessageReceived += (peer, message) =>
         {
             message.Sender = peer.Name;
-            _consoleUI.DisplayMessage(message);
+            // _consoleUI.DisplayMessage(message);
             _tcpServer.BroadcastAsync(message);
         };
         _tcpServer.OnPeerDisconnected += (peer) =>
@@ -111,15 +98,8 @@ class Program
         };
         _tcpClientHandler.OnDisconnected += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Disconnected from server: {peer.Name}");
+            _consoleUI.DisplaySystem($"Disconnected from server.");
         };
-
-        // TODO: Start background threads
-        // 1. Start a thread/task for processing incoming messages
-        // 2. Start a thread/task for sending outgoing messages
-        // Note: TcpServer.Start() will create its own listen thread
-
-
 
         Console.WriteLine("Type /help for available commands");
         Console.WriteLine();
@@ -128,17 +108,6 @@ class Program
         bool running = true;
         while (running)
         {
-            // TODO: Implement the main input loop
-            // 1. Read a line from the console
-            // 2. Skip empty input
-            // 3. Parse the input using ConsoleUI.ParseCommand()
-            // 4. Handle the command based on CommandType:
-            //    - Connect: Call TcpClientHandler.ConnectAsync()
-            //    - Listen: Call TcpServer.Start()
-            //    - ListPeers: Display connected peers
-            //    - History: Show message history
-            //    - Quit: Set running = false
-            //    - Not a command: Send as a message to peers
 
             // command parsing
             string? input = Console.ReadLine();
@@ -164,15 +133,7 @@ class Program
                 //await _tcpServer.BroadcastAsync(commandResult.Message!);
                 continue;
             }
-            //  2. If it's a command, split by spaces and parse:
-    ///    - "/connect <ip> <port>" -> CommandType.Connect with Args = [ip, port]
-    ///    - "/listen <port>" -> CommandType.Listen with Args = [port]
-    ///    - "/peers" -> CommandType.ListPeers
-    ///    - "/history" -> CommandType.History
-    ///    - "/quit" or "/exit" -> CommandType.Quit
-    ///    - Unknown command -> CommandType.Unknown with error message
 
-            // Temporary basic command handling - replace with full implementation
             switch (commandResult.CommandType)
             {   
                 case CommandType.Connect:
@@ -205,25 +166,18 @@ class Program
             }
         }
 
-        // TODO: Implement graceful shutdown
-        // 1. Cancel the CancellationTokenSource
-        // 2. Stop the TcpServer
-        // 3. Disconnect all clients
-        // 4. Complete the MessageQueue
-        // 5. Wait for background threads to finish
         _cancellationTokenSource.Cancel();
         var peersToDisconnect = _tcpServer.GetConnectedPeers();
-        _tcpServer.Stop();
         foreach(var peer in peersToDisconnect)
         {
             _tcpClientHandler.Disconnect(peer.Id);
         }
+        _tcpServer.Stop();
         Console.WriteLine("Goodbye!");
     }
 
     /// <summary>
     /// Display help information.
-    /// This is a temporary implementation - integrate with ConsoleUI.ShowHelp()
     /// </summary>
     private static void ShowHelp()
     {
