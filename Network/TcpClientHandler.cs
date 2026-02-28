@@ -109,7 +109,7 @@ public class TcpClientHandler
         }
         finally
         {
-            Disconnect(peer.Id);
+            Disconnect(peer.Address.ToString());
         }
     }
 
