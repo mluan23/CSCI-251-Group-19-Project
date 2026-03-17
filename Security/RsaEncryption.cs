@@ -37,8 +37,7 @@ public class RsaEncryption
     /// </summary>
     public RsaEncryption()
     {
-        // TODO: Generate RSA key pair (2048 bits)
-        throw new NotImplementedException("Implement constructor - create RSA key pair");
+        _rsa = RSA.Create(2048);
     }
 
     /// <summary>
@@ -50,7 +49,7 @@ public class RsaEncryption
     /// </summary>
     public byte[] ExportPublicKey()
     {
-        throw new NotImplementedException("Implement ExportPublicKey() - see TODO in comments above");
+        return _rsa.ExportRSAPublicKey();
     }
 
     /// <summary>
@@ -63,7 +62,7 @@ public class RsaEncryption
     /// </summary>
     public void ImportPublicKey(byte[] publicKey)
     {
-        throw new NotImplementedException("Implement ImportPublicKey() - see TODO in comments above");
+        _rsa.ImportRSAPublicKey(publicKey, out _);
     }
 
     /// <summary>
@@ -79,7 +78,9 @@ public class RsaEncryption
     /// </summary>
     public byte[] EncryptSessionKey(byte[] aesKey, byte[] peerPublicKey)
     {
-        throw new NotImplementedException("Implement EncryptSessionKey() - see TODO in comments above");
+        using var peerRsa = RSA.Create();
+        peerRsa.ImportRSAPublicKey(peerPublicKey, out _);
+        return peerRsa.Encrypt(aesKey, RSAEncryptionPadding.OaepSHA256);
     }
 
     /// <summary>
@@ -93,7 +94,7 @@ public class RsaEncryption
     /// </summary>
     public byte[] DecryptSessionKey(byte[] encryptedKey)
     {
-        throw new NotImplementedException("Implement DecryptSessionKey() - see TODO in comments above");
+        return _rsa.Decrypt(encryptedKey, RSAEncryptionPadding.OaepSHA256);
     }
 
     /// <summary>
