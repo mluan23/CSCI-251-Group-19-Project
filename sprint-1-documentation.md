@@ -5,7 +5,7 @@
 
 **Team Members:**
 - Aveinn Swar - Implemented the TcpClientHandler and did some documentation
-- Matthew Luan - Implemented the TcpServer, Program, various bug fixes, and documentation
+- Matthew Luan - Implemented the TcpServer, Program, various bug fixes, documentation, and demo
 - Aman Shah - Implemented the console UI and various bug fixes
 - Jordany Roman - Implemented the MessageQueue (not needed for this sprint), and did various bug fixes
 
@@ -102,8 +102,8 @@ None for now.
 ## Video Demo Checklist
 
 Your demo video (3-5 minutes) should show:
-- [ ] Starting three instances of the application
-- [ ] Connecting two client instances to the server
-- [ ] Sending messages in both directions
-- [ ] Disconnecting gracefully
+- [X] Starting three instances of the application
+- [X] Connecting two client instances to the server
+- [X] Sending messages in both directions
+- [X] Disconnecting gracefully
 - [ ] (Optional) Showing thread-safe behavior under load
