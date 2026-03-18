@@ -160,6 +160,21 @@ class Program
                 case CommandType.Help:
                     ShowHelp();
                     break;
+                case CommandType.CreateRoom:
+                    Console.WriteLine("Not implemented");
+                    break;
+                case CommandType.JoinRoom:
+                    Console.WriteLine("Not implemented");
+                    break;
+                case CommandType.LeaveRoom:
+                    Console.WriteLine("Not implemented");
+                    break;
+                case CommandType.ListRooms:
+                    Console.WriteLine("Not implemented");
+                    break;
+                case CommandType.MessageRoom:
+                    Console.WriteLine("Not implemented");
+                    break;
                 default:
                     Console.WriteLine("not a command");
                     break;
