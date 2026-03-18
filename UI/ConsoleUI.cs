@@ -64,12 +64,18 @@ public class ConsoleUI
     public void ShowHelp()
     {
         Console.WriteLine("Available commands:");
-        Console.WriteLine("  /connect <ip> <port>  - Connect to a peer");
         Console.WriteLine("  /listen <port>        - Start listening for connections");
-        Console.WriteLine("  /peers                - List known peers");
-        Console.WriteLine("  /history              - View message history");
+        Console.WriteLine("  /connect <ip> <port>  - Connect to a peer");
         Console.WriteLine("  /quit or /exit        - Exit the application");
-        Console.WriteLine("  <any text>            - Send as a message");    }
+        Console.WriteLine("  /create #room         - Create a new chat room");
+        Console.WriteLine("  /join #room           - Join an existing room");
+        Console.WriteLine("  /leave #room          - Leave a room");
+        Console.WriteLine("  /rooms                - List available rooms");
+        Console.WriteLine("  /msg #room message    - Send as a message");
+        Console.WriteLine(" ");
+        Console.WriteLine("  /peers                - List known peers");
+        Console.WriteLine("  /history              - View message history");    
+    }
 
     /// <summary>
     /// Parse user input and return a CommandResult.
@@ -122,6 +128,11 @@ public class ConsoleUI
             "/history" => CommandType.History,
             "/quit" or "/exit" => CommandType.Quit,
             "/help" => CommandType.Help,
+            "/create" => CommandType.CreateRoom,
+            "/join" => CommandType.JoinRoom,
+            "/leave" => CommandType.LeaveRoom,
+            "/rooms" => CommandType.ListRooms,
+            "/msg" => CommandType.MessageRoom,
             _ => CommandType.Unknown
         };
 
@@ -152,7 +163,12 @@ public enum CommandType
     ListPeers,
     History,
     Quit,
-    Help
+    Help,
+    CreateRoom,
+    JoinRoom,
+    LeaveRoom,
+    ListRooms,
+    MessageRoom
 }
 
 /// <summary>
