@@ -30,9 +30,7 @@ public class TcpServer
 
     public int Port { get; private set; }
     public bool IsListening { get; private set; }
-
-    public List<String> _rooms = new();
-
+    public Dictionary<string, List<String>> _rooms = new();
     /// <summary>
     /// Start listening for incoming connections on the specified port.
     ///
@@ -265,7 +263,7 @@ public class TcpServer
     {
         lock (_lock)
         {
-            _rooms.Add(roomName);
+            _rooms.Add(roomName, []);
         }
     }
 }
