@@ -259,6 +259,14 @@ public class TcpServer
         }
     }
 
+    public List<string> GetAvailableRooms()
+    {
+        lock (_lock)
+        {
+            return _rooms.Keys.ToList();
+        }
+    }
+
     public void addRoom(string roomName)
     {
         lock (_lock)
