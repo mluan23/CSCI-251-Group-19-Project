@@ -166,7 +166,7 @@ class Program
                     break;
                 case CommandType.JoinRoom:
                     string roomToJoin = commandResult.Args[0];
-                    if (_tcpServer.IsListening && !_tcpServer._rooms.Contains(roomToJoin))
+                    if (_tcpServer.IsListening && !_tcpServer._rooms.ContainsKey(roomToJoin))
                     {
                         Console.WriteLine($"Room '{roomToJoin}' does not exist. Use /create to create it.");
                     }
