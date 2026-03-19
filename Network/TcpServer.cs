@@ -274,4 +274,15 @@ public class TcpServer
             _rooms.Add(roomName, []);
         }
     }
+
+    public void JoinRoom(string roomName, string peerName)
+    {
+        lock (_lock)
+        {
+            if (_rooms.ContainsKey(roomName))
+            {
+                _rooms[roomName].Add(peerName);
+            }
+        }
+    }
 }

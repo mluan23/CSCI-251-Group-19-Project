@@ -26,6 +26,9 @@ public class TcpClientHandler
     public event Action<Peer>? OnDisconnected;
     public event Action<Peer, Message>? OnMessageReceived;
 
+    public event Action<string, Peer>? OnJoinRoom;
+    public Peer? _CurrentPeer { get; private set; }
+
     /// <summary>
     /// Connect to a peer at the specified address and port.
     ///
@@ -59,6 +62,7 @@ public class TcpClientHandler
                 Port = port,
                 IsConnected = true,
             };
+            _CurrentPeer = peer;
             lock (_lock)
             {
                 _connections[host] = peer;
@@ -206,6 +210,14 @@ public class TcpClientHandler
         lock (_lock)
         {
             return _connections.Values.ToList();
+        }
+    }
+
+    public void joinRoom(string roomName)
+    {
+        if (_CurrentPeer != null)
+        {
+            OnJoinRoom?.Invoke(roomName, _CurrentPeer);
         }
     }
 }

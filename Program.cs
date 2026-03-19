@@ -101,6 +101,11 @@ class Program
         {
             _consoleUI.DisplaySystem($"Disconnected from server.");
         };
+        _tcpClientHandler.OnJoinRoom += (roomName, peer) =>
+        {
+            _tcpServer.JoinRoom(roomName, peer.Id);
+            _consoleUI.DisplaySystem($"Joined room: {roomName}");
+        };
 
         Console.WriteLine("Type /help for available commands");
         Console.WriteLine();
