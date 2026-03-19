@@ -161,7 +161,7 @@ class Program
                     ShowHelp();
                     break;
                 case CommandType.CreateRoom:
-                    Console.WriteLine("Not implemented");
+                    _tcpServer.addRoom(commandResult.Args[0]);
                     break;
                 case CommandType.JoinRoom:
                     Console.WriteLine("Not implemented");

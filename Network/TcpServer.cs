@@ -31,6 +31,8 @@ public class TcpServer
     public int Port { get; private set; }
     public bool IsListening { get; private set; }
 
+    public List<String> _rooms = new();
+
     /// <summary>
     /// Start listening for incoming connections on the specified port.
     ///
@@ -256,6 +258,14 @@ public class TcpServer
         lock (_lock)
         {
             return _connectedPeers.ToList();
+        }
+    }
+
+    public void addRoom(string roomName)
+    {
+        lock (_lock)
+        {
+            _rooms.Add(roomName);
         }
     }
 }
