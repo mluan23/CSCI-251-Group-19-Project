@@ -171,14 +171,7 @@ class Program
                     break;
                 case CommandType.JoinRoom:
                     string roomToJoin = commandResult.Args[0];
-                    if (_tcpServer.IsListening && !_tcpServer._rooms.ContainsKey(roomToJoin))
-                    {
-                        Console.WriteLine($"Room '{roomToJoin}' does not exist. Use /create to create it.");
-                    }
-                    else
-                    {
-                        _currentRoom = roomToJoin;
-                    }
+                    _tcpClientHandler.joinRoom(roomToJoin);
                     break;
                 case CommandType.LeaveRoom:
                     Console.WriteLine("Not implemented");
