@@ -170,7 +170,12 @@ class Program
                     Console.WriteLine("Not implemented");
                     break;
                 case CommandType.ListRooms:
-                    Console.WriteLine("Not implemented");
+                    var rooms = _tcpServer.GetAvailableRooms();
+                    Console.WriteLine("Created Rooms");
+                    foreach(var room in rooms)
+                    {
+                        Console.WriteLine($"- {room}");
+                    }
                     break;
                 case CommandType.MessageRoom:
                     Console.WriteLine("Not implemented");
