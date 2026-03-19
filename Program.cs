@@ -62,6 +62,7 @@ class Program
     private static TcpClientHandler? _tcpClientHandler;
     private static ConsoleUI? _consoleUI;
     private static CancellationTokenSource? _cancellationTokenSource;
+    private static string? _currentRoom;
 
     static async Task Main(string[] args)
     {
@@ -164,7 +165,15 @@ class Program
                     _tcpServer.addRoom(commandResult.Args[0]);
                     break;
                 case CommandType.JoinRoom:
-                    Console.WriteLine("Not implemented");
+                    string roomToJoin = commandResult.Args[0];
+                    if (_tcpServer.IsListening && !_tcpServer._rooms.Contains(roomToJoin))
+                    {
+                        Console.WriteLine($"Room '{roomToJoin}' does not exist. Use /create to create it.");
+                    }
+                    else
+                    {
+                        _currentRoom = roomToJoin;
+                    }
                     break;
                 case CommandType.LeaveRoom:
                     Console.WriteLine("Not implemented");
