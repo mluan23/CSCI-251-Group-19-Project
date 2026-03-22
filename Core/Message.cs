@@ -20,6 +20,10 @@ public class Message
     // Sprint 2: Security fields
     public byte[]? Signature { get; set; }
     public byte[]? EncryptedContent { get; set; }
+    public byte[]? PublicKey { get; set; }
+
+    // Sprint 3: Target peer for directed messages
+    public string? TargetPeerId { get; set; }
 
     public override string ToString()
     {
