@@ -7,6 +7,7 @@
 
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using SecureMessenger.Core;
 
 namespace SecureMessenger.Network;
@@ -159,8 +160,10 @@ public class TcpServer
                         // strip "/create", just get room
                         string roomName = line.Substring(8);
                         if (!_rooms.ContainsKey(roomName))
+                        {
                             _rooms.Add(roomName, new List<string>());
                             Console.WriteLine($"{peer.Name} created room {roomName}");
+                        }
 
                         continue;
                     }
@@ -194,6 +197,29 @@ public class TcpServer
                         else
                         {
                             Console.WriteLine($"Room {roomName} does not exist.");
+                        }
+                        continue;
+                    }
+                if (line.StartsWith("/msg "))
+                    {
+                        string[] parts = line.Split(' ', 3);
+                        string roomName = parts[1];
+                        string content = parts[2];
+                        if (_rooms.ContainsKey(roomName) && _rooms[roomName].Contains(peer.Id))
+                        {
+                            foreach (string peerId in _rooms[roomName])
+                            {
+                                // skip sending the message back to the sender
+                                // if (peerId == peer.Id) continue;
+                                Message msg = new Message
+                                {
+                                    Content = content,
+                                    Sender = peer.Name,
+                                    TargetPeerId = peerId,
+                                    Room = roomName
+                                };
+                                OnMessageReceived?.Invoke(peer, msg);
+                            }
                         }
                         continue;
                     }
@@ -290,6 +316,29 @@ public class TcpServer
         }
     }
 
+    public async Task SendToPeerAsync(Message message)
+    {
+        Peer? targetPeer;
+        lock (_lock)
+        {
+            targetPeer = _connectedPeers.FirstOrDefault(p => p.Id == message.TargetPeerId);
+        }
+        if (targetPeer != null && targetPeer.IsConnected && targetPeer.Stream != null)
+        {
+            try
+            {
+                using var writer = new StreamWriter(targetPeer.Stream, leaveOpen: true);
+                string json = System.Text.Json.JsonSerializer.Serialize(message);
+                await writer.WriteLineAsync(json);
+                await writer.FlushAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to send to {targetPeer.Address}: {ex.Message}");
+            }
+        }
+    }
+
     /// <summary>
     /// Get a list of currently connected peers.
     /// Remember to use proper locking when accessing _connectedPeers.
@@ -326,6 +375,16 @@ public class TcpServer
             {
                 _rooms[roomName].Add(peerName);
             }
+        }
+    }
+
+    public void ListRooms()
+    {
+        List<string> createdRooms = GetAvailableRooms();
+        Console.WriteLine("Created Rooms");
+        foreach(var room in createdRooms)
+        {
+            Console.WriteLine($"- {room}");
         }
     }
 }

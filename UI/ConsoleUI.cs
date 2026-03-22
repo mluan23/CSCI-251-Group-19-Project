@@ -41,7 +41,11 @@ public class ConsoleUI
     {
         // Format timestamp as HH:mm:ss
         string timestamp = message.Timestamp.ToString("HH:mm:ss");
-        Console.WriteLine($"[{timestamp}] {message.Sender}: {message.Content}");    }
+        if (message.Room != null)
+            Console.WriteLine($"[{timestamp}] ({message.Room}) {message.Sender}: {message.Content}");    
+        else            
+            Console.WriteLine($"[{timestamp}] {message.Sender}: {message.Content}");
+    }
 
     /// <summary>
     /// Display a system message to the console.

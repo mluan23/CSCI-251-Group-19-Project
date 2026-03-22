@@ -22,6 +22,9 @@ public class Message
     public byte[]? EncryptedContent { get; set; }
     public byte[]? PublicKey { get; set; }
 
+    // so we can print the room name in the console ui when we receive a message from a room
+    public string? Room { get; set; }
+
     // Sprint 3: Target peer for directed messages
     public string? TargetPeerId { get; set; }
 

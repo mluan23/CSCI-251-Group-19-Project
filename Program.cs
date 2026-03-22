@@ -78,11 +78,26 @@ class Program
         {
             _consoleUI.DisplaySystem($"Peer connected: {peer.Name}");
         };
-        _tcpServer.OnMessageReceived += (peer, message) =>
+        _tcpServer.OnMessageReceived += async (peer, message) =>
         {
+            // idk if awaiting will be needed for the future but leaving this note incase we get some broken stuff in the future and that fixes anything
             message.Sender = peer.Name;
-            // _consoleUI.DisplayMessage(message);
-            _tcpServer.BroadcastAsync(message);
+
+            if (message.TargetPeerId != null)
+            {
+                _tcpServer.SendToPeerAsync(message);
+                // Message senderMsg = new Message
+                // {
+                //     Content = message.Content,
+                //     Sender = message.Sender,
+                //     TargetPeerId = peer.Id
+                // };
+                // // send back the msg to the sender
+                // _tcpServer.SendToPeerAsync(senderMsg);
+            }
+            else
+                _tcpServer.BroadcastAsync(message);
+            
         };
         _tcpServer.OnPeerDisconnected += (peer) =>
         {
@@ -174,16 +189,13 @@ class Program
                 case CommandType.LeaveRoom:
                     await _tcpClientHandler.BroadcastAsync($"/leave {commandResult.Args[0]}");
                     break;
-                case CommandType.ListRooms:
-                    var rooms = _tcpServer.GetAvailableRooms();
-                    Console.WriteLine("Created Rooms");
-                    foreach(var room in rooms)
-                    {
-                        Console.WriteLine($"- {room}");
-                    }
-                    break;
                 case CommandType.MessageRoom:
-                    Console.WriteLine("Not implemented");
+                    string room = commandResult.Args[0];
+                    string content = string.Join(" ", commandResult.Args[1..]);
+                    await _tcpClientHandler.BroadcastAsync($"/msg {room} {content}");
+                    break;
+                case CommandType.ListRooms:
+                    _tcpServer.ListRooms();
                     break;
                 default:
                     Console.WriteLine("not a command");
