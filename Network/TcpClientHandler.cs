@@ -63,12 +63,13 @@ public class TcpClientHandler
                 IsConnected = true,
             };
             _CurrentPeer = peer;
+            var reader = new StreamReader(peer.Stream, leaveOpen: true);
             lock (_lock)
             {
                 _connections[host] = peer;
             }
             OnConnected?.Invoke(peer);
-            _ = Task.Run(() => ReceiveLoop(peer)); // run for lifetime of connection
+            _ = Task.Run(() => ReceiveLoop(peer, reader)); // run for lifetime of connection
             return true;
         }
         catch (SocketException ex)
@@ -91,9 +92,8 @@ public class TcpClientHandler
     /// 7. Handle IOException (connection lost)
     /// 8. In finally block, call Disconnect
     /// </summary>
-    private async Task ReceiveLoop(Peer peer)
+    private async Task ReceiveLoop(Peer peer, StreamReader reader)
     {
-        using StreamReader reader = new StreamReader(peer.Stream);
         try
         {
             while (peer.IsConnected)
@@ -113,6 +113,7 @@ public class TcpClientHandler
         }
         finally
         {
+            reader.Dispose();
             Disconnect(peer.Address.ToString());
         }
     }
