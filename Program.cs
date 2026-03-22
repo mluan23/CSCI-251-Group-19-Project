@@ -62,8 +62,7 @@ class Program
     private static TcpClientHandler? _tcpClientHandler;
     private static ConsoleUI? _consoleUI;
     private static CancellationTokenSource? _cancellationTokenSource;
-    private static string? _currentRoom;
-
+    
     static async Task Main(string[] args)
     {
         Console.WriteLine("Secure Distributed Messenger");
@@ -101,11 +100,11 @@ class Program
         {
             _consoleUI.DisplaySystem($"Disconnected from server.");
         };
-        _tcpClientHandler.OnJoinRoom += (roomName, peer) =>
-        {
-            _tcpServer.JoinRoom(roomName, peer.Id);
-            _consoleUI.DisplaySystem($"Joined room: {roomName}");
-        };
+        // _tcpClientHandler.OnJoinRoom += (roomName, peer) =>
+        // {
+        //     _tcpServer.JoinRoom(roomName, peer.Id);
+        //     _consoleUI.DisplaySystem($"Joined room: {roomName}");
+        // };
 
         Console.WriteLine("Type /help for available commands");
         Console.WriteLine();
@@ -167,14 +166,13 @@ class Program
                     ShowHelp();
                     break;
                 case CommandType.CreateRoom:
-                    _tcpServer.addRoom(commandResult.Args[0]);
+                    await _tcpClientHandler.BroadcastAsync($"/create {commandResult.Args[0]}");
                     break;
                 case CommandType.JoinRoom:
-                    string roomToJoin = commandResult.Args[0];
-                    _tcpClientHandler.joinRoom(roomToJoin);
+                    await _tcpClientHandler.BroadcastAsync($"/join {commandResult.Args[0]}");
                     break;
                 case CommandType.LeaveRoom:
-                    Console.WriteLine("Not implemented");
+                    await _tcpClientHandler.BroadcastAsync($"/leave {commandResult.Args[0]}");
                     break;
                 case CommandType.ListRooms:
                     var rooms = _tcpServer.GetAvailableRooms();

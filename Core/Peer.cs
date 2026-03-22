@@ -26,9 +26,10 @@ public class Peer
     public TcpClient? Client { get; set; }
     public NetworkStream? Stream { get; set; }
 
-    // Sprint 2: Per-session encryption keys
+    // Sprint 2: Per-session encryption keys, chat rooms
     public byte[]? AesKey { get; set; }
     public byte[]? PublicKey { get; set; }
+    public List<string> Rooms {get; set;} = new List<string>();
 
     public override string ToString()
     {

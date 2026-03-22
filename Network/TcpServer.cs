@@ -30,7 +30,7 @@ public class TcpServer
 
     public int Port { get; private set; }
     public bool IsListening { get; private set; }
-    public Dictionary<string, List<String>> _rooms = new();
+    public Dictionary<string, List<string>> _rooms = new();
     /// <summary>
     /// Start listening for incoming connections on the specified port.
     ///
@@ -51,7 +51,7 @@ public class TcpServer
         IsListening = true;
         _listenThread = new Thread(ListenLoop);
         _listenThread.Start();
-        Console.WriteLine($"Server listening on port {port}.");
+        Console.WriteLine($"Server istening on port {port}.");
     }
 
     /// <summary>
@@ -154,6 +154,49 @@ public class TcpServer
                 {
                     break;
                 }
+                if (line.StartsWith("/create "))
+                    {
+                        // strip "/create", just get room
+                        string roomName = line.Substring(8);
+                        if (!_rooms.ContainsKey(roomName))
+                            _rooms.Add(roomName, new List<string>());
+                            Console.WriteLine($"{peer.Name} created room {roomName}");
+
+                        continue;
+                    }
+                if (line.StartsWith("/join "))
+                    {
+                        string roomName = line.Substring(6);
+                        if (_rooms.ContainsKey(roomName))
+                        {
+                            _rooms[roomName].Add(peer.Id);
+                            peer.Rooms.Add(roomName);
+                            Console.WriteLine($"{peer.Name} joined room {roomName}");
+
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Room {roomName} does not exist. Create it first.");
+                        }
+                        continue;
+                    }
+                if (line.StartsWith("/leave "))
+                    {
+                        string roomName = line.Substring(7);
+                        if (_rooms.ContainsKey(roomName))
+                        {
+                            if (_rooms[roomName].Remove(peer.Id))
+                            {   
+                                peer.Rooms.Remove(roomName);
+                                Console.WriteLine($"{peer.Name} left room {roomName}");
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Room {roomName} does not exist.");
+                        }
+                        continue;
+                    }
                 Message message = new Message
                 {
                     Content = line,

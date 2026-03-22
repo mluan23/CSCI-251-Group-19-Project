@@ -26,7 +26,7 @@ public class TcpClientHandler
     public event Action<Peer>? OnDisconnected;
     public event Action<Peer, Message>? OnMessageReceived;
 
-    public event Action<string, Peer>? OnJoinRoom;
+    // public event Action<string, Peer>? OnJoinRoom;
     public Peer? _CurrentPeer { get; private set; }
 
     /// <summary>
@@ -160,6 +160,9 @@ public class TcpClientHandler
     /// </summary>
     public async Task BroadcastAsync(string message)
     {
+        // this broadcasts to every "peer", although the only peer is going to be the server for any given client; 
+        // just to clear up any confusion in the future because of this stupid naming convention; at least i think this is right
+        // we could also just call SendAsync but who the hell cares
         List<Peer> peersToMessage;
         lock (_lock)
         {
@@ -213,11 +216,11 @@ public class TcpClientHandler
         }
     }
 
-    public void joinRoom(string roomName)
-    {
-        if (_CurrentPeer != null)
-        {
-            OnJoinRoom?.Invoke(roomName, _CurrentPeer);
-        }
-    }
+    // public void joinRoom(string roomName)
+    // {
+    //     if (_CurrentPeer != null)
+    //     {
+    //         _CurrentPeer.rooms = _CurrentPeer.rooms.Append(roomName).ToArray();
+    //     }
+    // }
 }
