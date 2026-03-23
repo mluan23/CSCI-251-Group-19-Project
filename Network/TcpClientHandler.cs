@@ -68,20 +68,20 @@ public class TcpClientHandler
             var reader = new StreamReader(peer.Stream, leaveOpen: true);
             using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
             
-            // var keyExchange = new KeyExchange();
-            // byte[] publicKey = keyExchange.GetPublicKey();
-            // await writer.WriteLineAsync(Convert.ToBase64String(publicKey));
-            // await writer.FlushAsync();
+            var keyExchange = new KeyExchange();
+            byte[] publicKey = keyExchange.GetPublicKey();
+            await writer.WriteLineAsync(Convert.ToBase64String(publicKey));
+            await writer.FlushAsync();
 
-            // string? serverPublicKeyBase64 = await reader.ReadLineAsync();
-            // keyExchange.ReceivePublicKey(Convert.FromBase64String(serverPublicKeyBase64!));
+            string? serverPublicKeyBase64 = await reader.ReadLineAsync();
+            keyExchange.ReceivePublicKey(Convert.FromBase64String(serverPublicKeyBase64!));
 
-            // byte[] encryptedSessionKey = keyExchange.CreateEncryptedSessionKey();
-            // await writer.WriteLineAsync(Convert.ToBase64String(encryptedSessionKey));
-            // await writer.FlushAsync();
+            byte[] encryptedSessionKey = keyExchange.CreateEncryptedSessionKey();
+            await writer.WriteLineAsync(Convert.ToBase64String(encryptedSessionKey));
+            await writer.FlushAsync();
 
-            // keyExchange.Complete();
-            // peer.AesKey = keyExchange.SessionKey;
+            keyExchange.Complete();
+            peer.AesKey = keyExchange.SessionKey;
 
             // prompt for name
             OnConnected?.Invoke(peer);

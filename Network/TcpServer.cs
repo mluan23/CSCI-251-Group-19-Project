@@ -9,6 +9,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using SecureMessenger.Core;
+using SecureMessenger.Security;
 
 namespace SecureMessenger.Network;
 
@@ -32,6 +33,7 @@ public class TcpServer
     public int Port { get; private set; }
     public bool IsListening { get; private set; }
     public Dictionary<string, List<string>> _rooms = new();
+    private readonly KeyExchange _keyExchange = new KeyExchange();
     /// <summary>
     /// Start listening for incoming connections on the specified port.
     ///
@@ -145,6 +147,22 @@ public class TcpServer
         StreamReader streamReader = new StreamReader(peer.Stream);
         try
         {
+        // receive client's public key
+        string? clientPublicKeyBase64 = streamReader.ReadLine();
+        _keyExchange.ReceivePublicKey(Convert.FromBase64String(clientPublicKeyBase64!));
+
+        // send server's public key
+        using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
+        writer.WriteLine(Convert.ToBase64String(_keyExchange.GetPublicKey()));
+        writer.Flush();
+
+        // receive encrypted session key
+        string? encryptedSessionKeyBase64 = streamReader.ReadLine();
+        _keyExchange.ReceiveEncryptedSessionKey(Convert.FromBase64String(encryptedSessionKeyBase64!));
+
+        peer.AesKey = _keyExchange.SessionKey;
+
+        // now read name
         string? name = streamReader.ReadLine();
         peer.Name = name;
         OnPeerConnected?.Invoke(peer);
