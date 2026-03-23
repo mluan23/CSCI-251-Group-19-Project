@@ -83,6 +83,7 @@ public class TcpClientHandler
 
             keyExchange.Complete();
             peer.AesKey = keyExchange.SessionKey;
+            // Console.WriteLine($"Client AES key: {Convert.ToBase64String(peer.AesKey!)}");
 
             // prompt for name
             OnConnected?.Invoke(peer);
@@ -131,11 +132,13 @@ public class TcpClientHandler
                     break;
                 }
                 Message message = System.Text.Json.JsonSerializer.Deserialize<Message>(line);
-                // if (message.EncryptedContent != null && peer.AesKey != null)
-                // {
-                //     var aes = new AesEncryption(peer.AesKey);
-                //     message.Content = aes.Decrypt(message.EncryptedContent);
-                // }
+                // Console.WriteLine($"EncryptedContent null: {message.EncryptedContent == null}, Content: '{message.Content}'");
+                if (message.EncryptedContent != null && peer.AesKey != null)
+                    {
+                        var aes = new AesEncryption(peer.AesKey);
+                        message.Content = aes.Decrypt(message.EncryptedContent);
+                        // Console.WriteLine($"Decrypted: '{message.Content}'");
+                    }
                 OnMessageReceived.Invoke(peer, message);
             }
         }
@@ -176,12 +179,12 @@ public class TcpClientHandler
                     TargetPeerId = message.TargetPeerId,
                     Room = message.Room
                 };
-                // if (peer.AesKey != null && message.Type == MessageType.Text)
-                // {
-                //     var aes = new AesEncryption(peer.AesKey);
-                //     messageToSend.EncryptedContent = aes.Encrypt(message.Content);
-                //     messageToSend.Content = string.Empty;
-                // }
+                if (peer.AesKey != null && message.Type == MessageType.Text)
+                {
+                    var aes = new AesEncryption(peer.AesKey);
+                    messageToSend.EncryptedContent = aes.Encrypt(message.Content);
+                    messageToSend.Content = string.Empty;
+                }
                 string json = System.Text.Json.JsonSerializer.Serialize(messageToSend);
                 await writer.WriteLineAsync(json);
                 await writer.FlushAsync();

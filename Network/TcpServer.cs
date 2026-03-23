@@ -10,6 +10,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using SecureMessenger.Core;
 using SecureMessenger.Security;
+using static SecureMessenger.Core.Message;
 
 namespace SecureMessenger.Network;
 
@@ -33,8 +34,7 @@ public class TcpServer
     public int Port { get; private set; }
     public bool IsListening { get; private set; }
     public Dictionary<string, List<string>> _rooms = new();
-    private readonly KeyExchange _keyExchange = new KeyExchange();
-    /// <summary>
+    private readonly RsaEncryption _rsa = new RsaEncryption();    /// <summary>
     /// Start listening for incoming connections on the specified port.
     ///
     /// TODO: Implement the following:
@@ -147,25 +147,25 @@ public class TcpServer
         StreamReader streamReader = new StreamReader(peer.Stream);
         try
         {
-        // receive client's public key
-        string? clientPublicKeyBase64 = streamReader.ReadLine();
-        _keyExchange.ReceivePublicKey(Convert.FromBase64String(clientPublicKeyBase64!));
+            // receive client's public key
+            string? clientPublicKeyBase64 = streamReader.ReadLine();
+            peer.PublicKey = Convert.FromBase64String(clientPublicKeyBase64!);
 
-        // send server's public key
-        using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
-        writer.WriteLine(Convert.ToBase64String(_keyExchange.GetPublicKey()));
-        writer.Flush();
+            // send server's public key
+            using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
+            writer.WriteLine(Convert.ToBase64String(_rsa.ExportPublicKey()));
+            writer.Flush();
 
-        // receive encrypted session key
-        string? encryptedSessionKeyBase64 = streamReader.ReadLine();
-        _keyExchange.ReceiveEncryptedSessionKey(Convert.FromBase64String(encryptedSessionKeyBase64!));
+            // receive encrypted session key, decrypt with server's private key
+            string? encryptedSessionKeyBase64 = streamReader.ReadLine();
+            peer.AesKey = _rsa.DecryptSessionKey(Convert.FromBase64String(encryptedSessionKeyBase64!));
+            // Console.WriteLine($"Server AES key for {peer.Name}: {Convert.ToBase64String(peer.AesKey!)}");
 
-        peer.AesKey = _keyExchange.SessionKey;
 
-        // now read name
-        string? name = streamReader.ReadLine();
-        peer.Name = name;
-        OnPeerConnected?.Invoke(peer);
+            // now read name
+            string? name = streamReader.ReadLine();
+            peer.Name = name;
+            OnPeerConnected?.Invoke(peer);
             while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
             {
                 string? line = streamReader.ReadLine();
@@ -244,6 +244,12 @@ public class TcpServer
                         continue;
                     }
                 incoming.Sender = peer.Name;
+                if (incoming.EncryptedContent != null && peer.AesKey != null)
+                {
+                    var aes = new AesEncryption(peer.AesKey);
+                    incoming.Content = aes.Decrypt(incoming.EncryptedContent);
+                    incoming.EncryptedContent = null; // clear so server re-encrypts for each recipient
+                }
                 OnMessageReceived?.Invoke(peer, incoming);
             }
         }
@@ -320,7 +326,24 @@ public class TcpServer
                 try
                 {
                     using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
-                    string json = System.Text.Json.JsonSerializer.Serialize(message);
+                    var messageToSend = new Message
+                    {
+                        Id = message.Id,
+                        Sender = message.Sender,
+                        Content = message.Content,
+                        Timestamp = message.Timestamp,
+                        Type = message.Type,
+                        TargetPeerId = message.TargetPeerId,
+                        Room = message.Room
+                    };
+                    if (peer.AesKey != null && message.Type == MessageType.Text)
+                    {
+                        // Console.WriteLine($"Encrypting content: '{message.Content}'");
+                        var aes = new AesEncryption(peer.AesKey);
+                        messageToSend.EncryptedContent = aes.Encrypt(message.Content);
+                        messageToSend.Content = string.Empty;
+                    }
+                    string json = System.Text.Json.JsonSerializer.Serialize(messageToSend);
                     await writer.WriteLineAsync(json);
                     await writer.FlushAsync();
                 }
@@ -344,7 +367,23 @@ public class TcpServer
             try
             {
                 using var writer = new StreamWriter(targetPeer.Stream, leaveOpen: true);
-                string json = System.Text.Json.JsonSerializer.Serialize(message);
+                var messageToSend = new Message
+                {
+                    Id = message.Id,
+                    Sender = message.Sender,
+                    Content = message.Content,
+                    Timestamp = message.Timestamp,
+                    Type = message.Type,
+                    TargetPeerId = message.TargetPeerId,
+                    Room = message.Room
+                };
+                if (targetPeer.AesKey != null && message.Type == MessageType.Text)
+                {
+                    var aes = new AesEncryption(targetPeer.AesKey);
+                    messageToSend.EncryptedContent = aes.Encrypt(message.Content);
+                    messageToSend.Content = string.Empty;
+                }
+                string json = System.Text.Json.JsonSerializer.Serialize(messageToSend);
                 await writer.WriteLineAsync(json);
                 await writer.FlushAsync();
             }
