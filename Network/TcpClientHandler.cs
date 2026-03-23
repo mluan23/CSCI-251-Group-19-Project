@@ -134,7 +134,7 @@ public class TcpClientHandler
                     break;
                 }
                 Message message = System.Text.Json.JsonSerializer.Deserialize<Message>(line);
-                Console.WriteLine($"Signature null: {message.Signature == null}, PublicKey null: {message.PublicKey == null}");
+                // Console.WriteLine($"Signature null: {message.Signature == null}, PublicKey null: {message.PublicKey == null}");
                 if (message.EncryptedContent != null && peer.AesKey != null)
                 {
                     var aes = new AesEncryption(peer.AesKey);

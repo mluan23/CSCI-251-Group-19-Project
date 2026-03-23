@@ -55,7 +55,7 @@ public class TcpServer
         IsListening = true;
         _listenThread = new Thread(ListenLoop);
         _listenThread.Start();
-        Console.WriteLine($"Server istening on port {port}.");
+        Console.WriteLine($"Server listening on port {port}.");
     }
 
     /// <summary>
