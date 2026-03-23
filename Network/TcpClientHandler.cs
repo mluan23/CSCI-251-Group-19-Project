@@ -10,6 +10,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using SecureMessenger.Core;
 using System.Collections.Concurrent;
+using SecureMessenger.Security;
 
 
 namespace SecureMessenger.Network;
@@ -55,6 +56,7 @@ public class TcpClientHandler
             Console.WriteLine("Establishing Connection...");
             await client.ConnectAsync(host, port);
             var peer = new Peer
+
             {
                 Client = client,
                 Stream = client.GetStream(),
@@ -64,6 +66,30 @@ public class TcpClientHandler
             };
             _CurrentPeer = peer;
             var reader = new StreamReader(peer.Stream, leaveOpen: true);
+            using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
+            
+            // var keyExchange = new KeyExchange();
+            // byte[] publicKey = keyExchange.GetPublicKey();
+            // await writer.WriteLineAsync(Convert.ToBase64String(publicKey));
+            // await writer.FlushAsync();
+
+            // string? serverPublicKeyBase64 = await reader.ReadLineAsync();
+            // keyExchange.ReceivePublicKey(Convert.FromBase64String(serverPublicKeyBase64!));
+
+            // byte[] encryptedSessionKey = keyExchange.CreateEncryptedSessionKey();
+            // await writer.WriteLineAsync(Convert.ToBase64String(encryptedSessionKey));
+            // await writer.FlushAsync();
+
+            // keyExchange.Complete();
+            // peer.AesKey = keyExchange.SessionKey;
+
+            // prompt for name
+            OnConnected?.Invoke(peer);
+            Console.Write("What is your name? ");
+            string? name = Console.ReadLine();
+            await writer.WriteLineAsync(name);
+            await writer.FlushAsync();
+
             lock (_lock)
             {
                 _connections[host] = peer;

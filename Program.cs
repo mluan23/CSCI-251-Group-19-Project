@@ -105,7 +105,7 @@ class Program
         };
         _tcpClientHandler.OnConnected += (peer) =>
         {
-            _consoleUI.DisplaySystem("Connected to server.\nWhat is your name?");
+            _consoleUI.DisplaySystem("Connected to server.");
         };
         _tcpClientHandler.OnMessageReceived += (peer, message) =>
         {   
