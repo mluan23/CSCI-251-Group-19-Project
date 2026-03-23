@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using SecureMessenger.Core;
 using System.Collections.Concurrent;
 using SecureMessenger.Security;
+using static SecureMessenger.Core.Message;
 
 
 namespace SecureMessenger.Network;
@@ -130,6 +131,11 @@ public class TcpClientHandler
                     break;
                 }
                 Message message = System.Text.Json.JsonSerializer.Deserialize<Message>(line);
+                // if (message.EncryptedContent != null && peer.AesKey != null)
+                // {
+                //     var aes = new AesEncryption(peer.AesKey);
+                //     message.Content = aes.Decrypt(message.EncryptedContent);
+                // }
                 OnMessageReceived.Invoke(peer, message);
             }
         }
@@ -147,14 +153,8 @@ public class TcpClientHandler
     /// <summary>
     /// Send a message to a specific peer.
     ///
-    /// TODO: Implement the following:
-    /// 1. Look up the peer in _connections by peerId (with proper locking)
-    /// 2. If peer exists and is connected with a valid stream:
-    ///    - Create a StreamWriter (with leaveOpen: true)
-    ///    - Write the message line asynchronously
-    ///    - Flush the writer
     /// </summary>
-    public async Task SendAsync(string peerId, string message)
+    public async Task SendAsync(string peerId, Message message)
     {
         Peer peer;
         lock (_lock)
@@ -165,12 +165,27 @@ public class TcpClientHandler
         {
             try
             {
-                using (var writer = new StreamWriter(peer.Stream, leaveOpen: true))
+                using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
+                var messageToSend = new Message
                 {
-                    await writer.WriteLineAsync(message);
-                    await writer.FlushAsync();
-                }
-            }       
+                    Id = message.Id,
+                    Sender = message.Sender,
+                    Content = message.Content,
+                    Timestamp = message.Timestamp,
+                    Type = message.Type,
+                    TargetPeerId = message.TargetPeerId,
+                    Room = message.Room
+                };
+                // if (peer.AesKey != null && message.Type == MessageType.Text)
+                // {
+                //     var aes = new AesEncryption(peer.AesKey);
+                //     messageToSend.EncryptedContent = aes.Encrypt(message.Content);
+                //     messageToSend.Content = string.Empty;
+                // }
+                string json = System.Text.Json.JsonSerializer.Serialize(messageToSend);
+                await writer.WriteLineAsync(json);
+                await writer.FlushAsync();
+            }
             catch (Exception ex)
             {
                 Console.WriteLine($"Failed to send message to {peerId}: {ex.Message}");
@@ -181,15 +196,9 @@ public class TcpClientHandler
     /// <summary>
     /// Broadcast a message to all connected peers.
     ///
-    /// TODO: Implement the following:
-    /// 1. Get a copy of all peers (with proper locking)
-    /// 2. Loop through each peer and call SendAsync
     /// </summary>
-    public async Task BroadcastAsync(string message)
+    public async Task BroadcastAsync(Message message)
     {
-        // this broadcasts to every "peer", although the only peer is going to be the server for any given client; 
-        // just to clear up any confusion in the future because of this stupid naming convention; at least i think this is right
-        // we could also just call SendAsync but who the hell cares
         List<Peer> peersToMessage;
         lock (_lock)
         {
@@ -204,13 +213,7 @@ public class TcpClientHandler
 
     /// <summary>
     /// Disconnect from a peer.
-    ///
-    /// TODO: Implement the following:
-    /// 1. Remove the peer from _connections (with proper locking)
-    /// 2. If peer was found:
-    ///    - Set IsConnected to false
-    ///    - Dispose the Client and Stream
-    ///    - Invoke OnDisconnected event
+    /// 
     /// </summary>
     public void Disconnect(string peerId)
     {

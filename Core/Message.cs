@@ -22,6 +22,8 @@ public class Message
     public byte[]? EncryptedContent { get; set; }
     public byte[]? PublicKey { get; set; }
 
+    public MessageType Type { get; set; } = MessageType.Text;
+
     // so we can print the room name in the console ui when we receive a message from a room
     public string? Room { get; set; }
 
@@ -31,5 +33,14 @@ public class Message
     public override string ToString()
     {
         return $"[{Timestamp:HH:mm:ss}] {Sender}: {Content}";
+    }
+    public enum MessageType
+    {
+        Text,
+        KeyExchange,
+        Heartbeat,
+        PeerDiscovery,
+        // add this guy so we can properly encrypt
+        Command
     }
 }

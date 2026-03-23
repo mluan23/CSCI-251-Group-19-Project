@@ -173,10 +173,12 @@ public class TcpServer
                 {
                     break;
                 }
-                if (line.StartsWith("/create "))
+                Message incoming = System.Text.Json.JsonSerializer.Deserialize<Message>(line)!;
+                string content = incoming.Content;
+                if (content.StartsWith("/create "))
                     {
                         // strip "/create", just get room
-                        string roomName = line.Substring(8);
+                        string roomName = content.Substring(8);
                         if (!_rooms.ContainsKey(roomName))
                         {
                             _rooms.Add(roomName, new List<string>());
@@ -185,9 +187,9 @@ public class TcpServer
 
                         continue;
                     }
-                if (line.StartsWith("/join "))
+                if (content.StartsWith("/join "))
                     {
-                        string roomName = line.Substring(6);
+                        string roomName = content.Substring(6);
                         if (_rooms.ContainsKey(roomName))
                         {
                             _rooms[roomName].Add(peer.Id);
@@ -201,9 +203,9 @@ public class TcpServer
                         }
                         continue;
                     }
-                if (line.StartsWith("/leave "))
+                if (content.StartsWith("/leave "))
                     {
-                        string roomName = line.Substring(7);
+                        string roomName = content.Substring(7);
                         if (_rooms.ContainsKey(roomName))
                         {
                             if (_rooms[roomName].Remove(peer.Id))
@@ -218,11 +220,11 @@ public class TcpServer
                         }
                         continue;
                     }
-                if (line.StartsWith("/msg "))
+                if (content.StartsWith("/msg "))
                     {
-                        string[] parts = line.Split(' ', 3);
+                        string[] parts = content.Split(' ', 3);
                         string roomName = parts[1];
-                        string content = parts[2];
+                        string messageContent = parts[2];
                         if (_rooms.ContainsKey(roomName) && _rooms[roomName].Contains(peer.Id))
                         {
                             foreach (string peerId in _rooms[roomName])
@@ -231,7 +233,7 @@ public class TcpServer
                                 // if (peerId == peer.Id) continue;
                                 Message msg = new Message
                                 {
-                                    Content = content,
+                                    Content = messageContent,
                                     Sender = peer.Name,
                                     TargetPeerId = peerId,
                                     Room = roomName
@@ -241,12 +243,8 @@ public class TcpServer
                         }
                         continue;
                     }
-                Message message = new Message
-                {
-                    Content = line,
-                    Sender = peer.Name
-                };
-                OnMessageReceived?.Invoke(peer, message);
+                incoming.Sender = peer.Name;
+                OnMessageReceived?.Invoke(peer, incoming);
             }
         }
         catch (IOException)

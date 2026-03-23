@@ -11,6 +11,7 @@ using SecureMessenger.Core;
 using SecureMessenger.Network;
 using SecureMessenger.Security;
 using SecureMessenger.UI;
+using static SecureMessenger.Core.Message;
 
 namespace SecureMessenger;
 
@@ -149,7 +150,7 @@ class Program
                     Console.WriteLine("Join a chat to send messages.");
                     continue;
                 }
-                await _tcpClientHandler.BroadcastAsync(commandResult.Message!);
+                await _tcpClientHandler.BroadcastAsync(new Message { Content = commandResult.Message! });
                 //await _tcpServer.BroadcastAsync(commandResult.Message!);
                 continue;
             }
@@ -181,18 +182,18 @@ class Program
                     ShowHelp();
                     break;
                 case CommandType.CreateRoom:
-                    await _tcpClientHandler.BroadcastAsync($"/create {commandResult.Args[0]}");
+                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/create {commandResult.Args[0]}", Type = MessageType.Command });
                     break;
                 case CommandType.JoinRoom:
-                    await _tcpClientHandler.BroadcastAsync($"/join {commandResult.Args[0]}");
+                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/join {commandResult.Args[0]}", Type = MessageType.Command });
                     break;
                 case CommandType.LeaveRoom:
-                    await _tcpClientHandler.BroadcastAsync($"/leave {commandResult.Args[0]}");
+                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/leave {commandResult.Args[0]}", Type = MessageType.Command });
                     break;
                 case CommandType.MessageRoom:
                     string room = commandResult.Args[0];
                     string content = string.Join(" ", commandResult.Args[1..]);
-                    await _tcpClientHandler.BroadcastAsync($"/msg {room} {content}");
+                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/msg {room} {content}", Type = MessageType.Command });
                     break;
                 case CommandType.ListRooms:
                     _tcpServer.ListRooms();
