@@ -124,6 +124,11 @@ public class KeyExchange
         State = ConnectionState.Established;
     }
 
+    public byte[] Sign(byte[] data)
+    {
+        return _rsa!.Sign(data);
+    }
+
     /// <summary>
     /// Check if key exchange is complete and we have a valid session key.
     /// </summary>

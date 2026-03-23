@@ -104,4 +104,8 @@ public class RsaEncryption
     {
         _rsa?.Dispose();
     }
+    public byte[] Sign(byte[] data)
+    {
+        return new MessageSigner(_rsa).SignData(data);
+    }
 }

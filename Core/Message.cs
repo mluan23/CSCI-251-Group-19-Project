@@ -41,6 +41,7 @@ public class Message
         Heartbeat,
         PeerDiscovery,
         // add this guy so we can properly encrypt
-        Command
+        Command,
+        RoomMessage
     }
 }

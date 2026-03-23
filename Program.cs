@@ -193,7 +193,12 @@ class Program
                 case CommandType.MessageRoom:
                     string room = commandResult.Args[0];
                     string content = string.Join(" ", commandResult.Args[1..]);
-                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/msg {room} {content}", Type = MessageType.Command });
+                    await _tcpClientHandler.BroadcastAsync(new Message 
+                    { 
+                        Content = content,
+                        Room = room,
+                        Type = MessageType.RoomMessage
+                    });
                     break;
                 case CommandType.ListRooms:
                     _tcpServer.ListRooms();

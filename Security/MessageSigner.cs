@@ -47,7 +47,7 @@ public class MessageSigner
     /// </summary>
     public byte[] SignData(byte[] data)
     {
-        throw new NotImplementedException("Implement SignData() - see TODO in comments above");
+        return _rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
     }
 
     /// <summary>
@@ -71,7 +71,24 @@ public class MessageSigner
     /// Security Note: Always reject messages with invalid signatures!
     /// </summary>
     public bool VerifyData(byte[] data, byte[] signature, byte[] publicKey)
-    {
-        throw new NotImplementedException("Implement VerifyData() - see TODO in comments above");
+    {   
+        // uncomment to simulate tampering
+        // signature[0] ^= 0xFF; 
+        try
+        {
+            using RSA rsa = RSA.Create();
+            rsa.ImportRSAPublicKey(publicKey, out _);
+            bool isValid = rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            if (!isValid)
+            {
+                Console.WriteLine("WARNING: Invalid signature detected - message may be tampered!");
+            }
+            return isValid;
+        }
+        catch (CryptographicException ex)
+        {
+            Console.WriteLine($"ERROR: Failed to verify signature - rejecting message. Exception: {ex.Message}");
+            return false;
+        }
     }
 }

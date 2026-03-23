@@ -12,6 +12,7 @@ using SecureMessenger.Core;
 using System.Collections.Concurrent;
 using SecureMessenger.Security;
 using static SecureMessenger.Core.Message;
+using System.Security.Cryptography;
 
 
 namespace SecureMessenger.Network;
@@ -30,6 +31,7 @@ public class TcpClientHandler
 
     // public event Action<string, Peer>? OnJoinRoom;
     public Peer? _CurrentPeer { get; private set; }
+    private KeyExchange? _keyExchange;
 
     /// <summary>
     /// Connect to a peer at the specified address and port.
@@ -69,20 +71,20 @@ public class TcpClientHandler
             var reader = new StreamReader(peer.Stream, leaveOpen: true);
             using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
             
-            var keyExchange = new KeyExchange();
-            byte[] publicKey = keyExchange.GetPublicKey();
+            _keyExchange = new KeyExchange();
+            byte[] publicKey = _keyExchange.GetPublicKey();
             await writer.WriteLineAsync(Convert.ToBase64String(publicKey));
             await writer.FlushAsync();
 
             string? serverPublicKeyBase64 = await reader.ReadLineAsync();
-            keyExchange.ReceivePublicKey(Convert.FromBase64String(serverPublicKeyBase64!));
+            _keyExchange.ReceivePublicKey(Convert.FromBase64String(serverPublicKeyBase64!));
 
-            byte[] encryptedSessionKey = keyExchange.CreateEncryptedSessionKey();
+            byte[] encryptedSessionKey = _keyExchange.CreateEncryptedSessionKey();
             await writer.WriteLineAsync(Convert.ToBase64String(encryptedSessionKey));
             await writer.FlushAsync();
 
-            keyExchange.Complete();
-            peer.AesKey = keyExchange.SessionKey;
+            _keyExchange.Complete();
+            peer.AesKey = _keyExchange.SessionKey;
             // Console.WriteLine($"Client AES key: {Convert.ToBase64String(peer.AesKey!)}");
 
             // prompt for name
@@ -132,13 +134,25 @@ public class TcpClientHandler
                     break;
                 }
                 Message message = System.Text.Json.JsonSerializer.Deserialize<Message>(line);
-                // Console.WriteLine($"EncryptedContent null: {message.EncryptedContent == null}, Content: '{message.Content}'");
+                Console.WriteLine($"Signature null: {message.Signature == null}, PublicKey null: {message.PublicKey == null}");
                 if (message.EncryptedContent != null && peer.AesKey != null)
+                {
+                    var aes = new AesEncryption(peer.AesKey);
+                    message.Content = aes.Decrypt(message.EncryptedContent);
+                }
+                if (message.Signature != null && message.PublicKey != null)
+                {
+                    var signer = new MessageSigner(RSA.Create());
+                    bool valid = signer.VerifyData(
+                        System.Text.Encoding.UTF8.GetBytes(message.Content),
+                        message.Signature,
+                        message.PublicKey);
+                    if (!valid)
                     {
-                        var aes = new AesEncryption(peer.AesKey);
-                        message.Content = aes.Decrypt(message.EncryptedContent);
-                        // Console.WriteLine($"Decrypted: '{message.Content}'");
+                        Console.WriteLine("Rejecting tampered message.");
+                        continue;
                     }
+                }
                 OnMessageReceived.Invoke(peer, message);
             }
         }
@@ -177,8 +191,15 @@ public class TcpClientHandler
                     Timestamp = message.Timestamp,
                     Type = message.Type,
                     TargetPeerId = message.TargetPeerId,
-                    Room = message.Room
+                    Room = message.Room,
+                    Signature = message.Signature,
+                    PublicKey = message.PublicKey
                 };
+                if (_keyExchange != null && (message.Type == MessageType.Text || (message.Type == MessageType.RoomMessage)))
+                {
+                    messageToSend.Signature = _keyExchange.Sign(
+                        System.Text.Encoding.UTF8.GetBytes(message.Content));
+                }
                 if (peer.AesKey != null && message.Type == MessageType.Text)
                 {
                     var aes = new AesEncryption(peer.AesKey);

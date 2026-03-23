@@ -21,6 +21,7 @@ namespace SecureMessenger.Network;
 public class TcpServer
 {
     private TcpListener? _listener;
+    // btw the public keys are stored here since peers track their public keys
     private readonly List<Peer> _connectedPeers = new();
     private CancellationTokenSource? _cancellationTokenSource;
     private Thread? _listenThread;
@@ -220,29 +221,29 @@ public class TcpServer
                         }
                         continue;
                     }
-                if (content.StartsWith("/msg "))
+                if (incoming.Type == MessageType.RoomMessage)
+                {
+                    string roomName = incoming.Room!;
+                    string messageContent = incoming.Content;
+                    if (_rooms.ContainsKey(roomName) && _rooms[roomName].Contains(peer.Id))
                     {
-                        string[] parts = content.Split(' ', 3);
-                        string roomName = parts[1];
-                        string messageContent = parts[2];
-                        if (_rooms.ContainsKey(roomName) && _rooms[roomName].Contains(peer.Id))
+                        foreach (string peerId in _rooms[roomName])
                         {
-                            foreach (string peerId in _rooms[roomName])
+                            Message msg = new Message
                             {
-                                // skip sending the message back to the sender
-                                // if (peerId == peer.Id) continue;
-                                Message msg = new Message
-                                {
-                                    Content = messageContent,
-                                    Sender = peer.Name,
-                                    TargetPeerId = peerId,
-                                    Room = roomName
-                                };
-                                OnMessageReceived?.Invoke(peer, msg);
-                            }
+                                Content = messageContent,
+                                Sender = peer.Name,
+                                TargetPeerId = peerId,
+                                Room = roomName,
+                                Signature = incoming.Signature,
+                                PublicKey = peer.PublicKey,
+                                Type = MessageType.RoomMessage
+                            };
+                            OnMessageReceived?.Invoke(peer, msg);
                         }
-                        continue;
                     }
+                    continue;
+                }
                 incoming.Sender = peer.Name;
                 if (incoming.EncryptedContent != null && peer.AesKey != null)
                 {
@@ -250,6 +251,9 @@ public class TcpServer
                     incoming.Content = aes.Decrypt(incoming.EncryptedContent);
                     incoming.EncryptedContent = null; // clear so server re-encrypts for each recipient
                 }
+                // idk name or id check later if stuff breaks
+                incoming.Sender = peer.Name;
+                incoming.PublicKey = peer.PublicKey;
                 OnMessageReceived?.Invoke(peer, incoming);
             }
         }
@@ -334,7 +338,9 @@ public class TcpServer
                         Timestamp = message.Timestamp,
                         Type = message.Type,
                         TargetPeerId = message.TargetPeerId,
-                        Room = message.Room
+                        Room = message.Room,
+                        Signature = message.Signature,
+                        PublicKey = message.PublicKey
                     };
                     if (peer.AesKey != null && message.Type == MessageType.Text)
                     {
@@ -375,7 +381,9 @@ public class TcpServer
                     Timestamp = message.Timestamp,
                     Type = message.Type,
                     TargetPeerId = message.TargetPeerId,
-                    Room = message.Room
+                    Room = message.Room,
+                    Signature = message.Signature,
+                    PublicKey = message.PublicKey
                 };
                 if (targetPeer.AesKey != null && message.Type == MessageType.Text)
                 {
