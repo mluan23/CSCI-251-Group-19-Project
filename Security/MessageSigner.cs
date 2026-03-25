@@ -71,24 +71,29 @@ public class MessageSigner
     /// Security Note: Always reject messages with invalid signatures!
     /// </summary>
     public bool VerifyData(byte[] data, byte[] signature, byte[] publicKey)
-    {   
+    {
         // uncomment to simulate tampering
         // signature[0] ^= 0xFF; 
-        try
+
+        if (data == null || signature == null || publicKey == null) // If any of the arguments are null just return false
         {
-            using RSA rsa = RSA.Create();
-            rsa.ImportRSAPublicKey(publicKey, out _);
-            bool isValid = rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            if (!isValid)
-            {
-                Console.WriteLine("WARNING: Invalid signature detected - message may be tampered!");
-            }
-            return isValid;
-        }
-        catch (CryptographicException ex)
-        {
-            Console.WriteLine($"ERROR: Failed to verify signature - rejecting message. Exception: {ex.Message}");
             return false;
         }
+        try
+            {
+                using RSA rsa = RSA.Create();
+                rsa.ImportRSAPublicKey(publicKey, out _);
+                bool isValid = rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                if (!isValid)
+                {
+                    Console.WriteLine("WARNING: Invalid signature detected - message may be tampered!");
+                }
+                return isValid;
+            }
+            catch (CryptographicException ex)
+            {
+                Console.WriteLine($"ERROR: Failed to verify signature - rejecting message. Exception: {ex.Message}");
+                return false;
+            }
     }
 }
