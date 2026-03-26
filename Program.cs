@@ -75,6 +75,9 @@ class Program
         _tcpServer = new TcpServer();
         _tcpClientHandler = new TcpClientHandler();
 
+        _ = Task.Run(() => ProcessIncomingMessages(_cancellationTokenSource.Token));
+        _ = Task.Run(() => ProcessOutgoingMessages(_cancellationTokenSource.Token));
+
         _tcpServer.OnPeerConnected += (peer) =>
         {
             _consoleUI.DisplaySystem($"Peer connected: {peer.Name}");
@@ -154,7 +157,7 @@ class Program
                     Console.WriteLine("Join a chat to send messages.");
                     continue;
                 }
-                await _tcpClientHandler.BroadcastAsync(new Message { Content = commandResult.Message! });
+                _messageQueue.EnqueueOutgoing(new Message { Content = commandResult.Message! });
                 //await _tcpServer.BroadcastAsync(commandResult.Message!);
                 continue;
             }
@@ -197,7 +200,7 @@ class Program
                 case CommandType.MessageRoom:
                     string room = commandResult.Args[0];
                     string content = string.Join(" ", commandResult.Args[1..]);
-                    await _tcpClientHandler.BroadcastAsync(new Message 
+                    _messageQueue.EnqueueOutgoing(new Message 
                     { 
                         Content = content,
                         Room = room,
@@ -221,6 +224,7 @@ class Program
         {
             _tcpClientHandler.Disconnect(peer.Id);
         }
+        _messageQueue.CompleteAdding();
         _tcpServer.Stop();
         Console.WriteLine("Goodbye!");
     }
@@ -239,4 +243,47 @@ class Program
     // - SendOutgoingMessages() - background task to send queued messages
     // - HandlePeerConnected(Peer peer) - event handler for new connections
     // - HandleMessageReceived(Peer peer, Message message) - event handler for messages
+
+    private static void ProcessIncomingMessages(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var message = _messageQueue.DequeueIncoming(ct);
+                _consoleUI.DisplayMessage(message);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+    private static async Task ProcessOutgoingMessages(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                var message = _messageQueue.DequeueOutgoing(ct);
+
+                if (message.Type == MessageType.RoomMessage)
+                {
+                    await _tcpClientHandler.BroadcastAsync(message);
+                }
+                else if (message.Type == MessageType.Text)
+                {
+                    await _tcpClientHandler.BroadcastAsync(message);
+                }
+                else if (message.Type == MessageType.Command)
+                {
+                    await _tcpClientHandler.BroadcastAsync(message);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
 }

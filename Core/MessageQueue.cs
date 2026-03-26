@@ -124,7 +124,6 @@ public class MessageQueue
             Console.WriteLine("Dequeuing outgoing message was cancelled.");
             throw;
         }
-        throw new NotImplementedException("Implement DequeueOutgoing() - see TODO in comments above");
     }
 
     /// <summary>
