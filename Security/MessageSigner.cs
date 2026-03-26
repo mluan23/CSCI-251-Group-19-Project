@@ -47,7 +47,10 @@ public class MessageSigner
     /// </summary>
     public byte[] SignData(byte[] data)
     {
-        return _rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        byte[] signature = _rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        string base64Sig = Convert.ToBase64String(signature);
+        Console.WriteLine($"Signature (these are first 16 characters): {base64Sig.Substring(0, 16)}...");
+        return signature;
     }
 
     /// <summary>
@@ -80,20 +83,25 @@ public class MessageSigner
             return false;
         }
         try
+        {
+            using RSA rsa = RSA.Create();
+            rsa.ImportRSAPublicKey(publicKey, out _);
+            Console.WriteLine("Signature verification is being done...");
+            bool isValid = rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            if (!isValid)
             {
-                using RSA rsa = RSA.Create();
-                rsa.ImportRSAPublicKey(publicKey, out _);
-                bool isValid = rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-                if (!isValid)
-                {
-                    Console.WriteLine("WARNING: Invalid signature detected - message may be tampered!");
-                }
-                return isValid;
+                Console.WriteLine("WARNING: Invalid signature detected - message may be tampered!");
             }
-            catch (CryptographicException ex)
+            else
             {
-                Console.WriteLine($"ERROR: Failed to verify signature - rejecting message. Exception: {ex.Message}");
-                return false;
+                Console.WriteLine("Verification Successful");
             }
+            return isValid;
+        }
+        catch (CryptographicException ex)
+        {
+            Console.WriteLine($"ERROR: Failed to verify signature - rejecting message. Exception: {ex.Message}");
+            return false;
+        }
     }
 }
