@@ -135,6 +135,10 @@ public class TcpClientHandler
                 }
                 Message message = System.Text.Json.JsonSerializer.Deserialize<Message>(line);
                 // Console.WriteLine($"Signature null: {message.Signature == null}, PublicKey null: {message.PublicKey == null}");
+                if (message.Content.StartsWith("Created Rooms:"))
+                {
+                    Console.WriteLine(message.Content);
+                }
                 if (message.EncryptedContent != null && peer.AesKey != null)
                 {
                     var aes = new AesEncryption(peer.AesKey);
@@ -269,6 +273,8 @@ public class TcpClientHandler
             return _connections.Values.ToList();
         }
     }
+
+    
 
     // public void joinRoom(string roomName)
     // {

@@ -125,7 +125,7 @@ public class TcpServer
         {
             _connectedPeers.Add(peer);
         }
-        Thread receiveThread = new Thread(() => ReceiveLoop(peer));
+        Thread receiveThread = new Thread(() => ReceiveLoopAsync(peer));
         receiveThread.Start();
     }
 
@@ -142,7 +142,7 @@ public class TcpServer
     /// 7. Handle IOException (connection lost)
     /// 8. In finally block, call DisconnectPeer
     /// </summary>
-    private void ReceiveLoop(Peer peer)
+    private async Task ReceiveLoopAsync(Peer peer)
     {
         // make the user enter their name here so the server thread not blocked
         StreamReader streamReader = new StreamReader(peer.Stream);
@@ -221,6 +221,23 @@ public class TcpServer
                         }
                         continue;
                     }
+                if (content.StartsWith("/rooms"))
+                {
+                    List<string> createdRooms = GetAvailableRooms();
+                    // Console.WriteLine("Created Rooms:");
+                    // foreach(var room in createdRooms)                    {
+                    //     Console.WriteLine($"- {room}");
+                    // }
+                    await SendAsync(peer.Id, new Message { Content = "Created Rooms:\n" + string.Join("\n", createdRooms) });
+                    continue;
+                    // Console.WriteLine("Created Rooms");
+                    // foreach(var room in createdRooms)
+                    // {
+                    //     Console.WriteLine($"- {room}");
+                    // }
+                    // continue;
+
+                }
                 if (incoming.Type == MessageType.RoomMessage)
                 {
                     string roomName = incoming.Room!;
@@ -316,6 +333,28 @@ public class TcpServer
     /// <summary>
     /// Broadcast a message to all peers connected to this server.
     /// </summary>
+    public async Task SendAsync(string peerid, Message message)
+    {
+        Peer? peer;
+        lock (_lock)
+        {
+            peer = _connectedPeers.FirstOrDefault(p => p.Id == peerid);
+        }
+        try
+        {
+            using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
+            string json = System.Text.Json.JsonSerializer.Serialize(message);
+            await writer.WriteLineAsync(json);
+            await writer.FlushAsync();
+            
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to send to {peer.Address}: {ex.Message}");
+        }
+
+        
+    }
     public async Task BroadcastAsync(Message message)
     {
         List<Peer> peers;

@@ -110,6 +110,10 @@ class Program
         };
         _tcpClientHandler.OnMessageReceived += (peer, message) =>
         {   
+            if (message.Content.StartsWith("Created Rooms:"))
+            {
+                return;
+            }
             _consoleUI.DisplayMessage(message);
         };
         _tcpClientHandler.OnDisconnected += (peer) =>
@@ -188,7 +192,7 @@ class Program
                     await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/join {commandResult.Args[0]}", Type = MessageType.Command });
                     break;
                 case CommandType.LeaveRoom:
-                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/leave {commandResult.Args[0]}", Type = MessageType.Command });
+                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/leave {commandResult.Args[0]}", Sender = "Server", Type = MessageType.Command });
                     break;
                 case CommandType.MessageRoom:
                     string room = commandResult.Args[0];
@@ -201,8 +205,10 @@ class Program
                     });
                     break;
                 case CommandType.ListRooms:
-                    _tcpServer.ListRooms();
+                    await _tcpClientHandler.BroadcastAsync(new Message { Content = "/rooms", Type = MessageType.Command });
                     break;
+                    // _tcpServer.ListRooms();
+                    // break;
                 default:
                     Console.WriteLine("not a command");
                     break;
