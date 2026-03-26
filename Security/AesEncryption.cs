@@ -87,8 +87,8 @@ public class AesEncryption
         Buffer.BlockCopy(aes.IV, 0, result, 0, aes.IV.Length);
         Buffer.BlockCopy(ciphertext, 0, result, aes.IV.Length, ciphertext.Length);
 
-        Console.WriteLine($"Encrypting: '{plaintext}'");
-        Console.WriteLine($"Result: {Convert.ToBase64String(result)}");
+        // Console.WriteLine($"Encrypting: '{plaintext}'");
+        // Console.WriteLine($"Result: {Convert.ToBase64String(result)}");
 
         return result;
     }

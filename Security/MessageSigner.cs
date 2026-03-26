@@ -49,7 +49,7 @@ public class MessageSigner
     {
         byte[] signature = _rsa.SignData(data, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         string base64Sig = Convert.ToBase64String(signature);
-        Console.WriteLine($"Signature (these are first 16 characters): {base64Sig.Substring(0, 16)}...");
+        // Console.WriteLine($"Signature (these are first 16 characters): {base64Sig.Substring(0, 16)}...");
         return signature;
     }
 
@@ -86,16 +86,16 @@ public class MessageSigner
         {
             using RSA rsa = RSA.Create();
             rsa.ImportRSAPublicKey(publicKey, out _);
-            Console.WriteLine("Signature verification is being done...");
+            // Console.WriteLine("Signature verification is being done...");
             bool isValid = rsa.VerifyData(data, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            if (!isValid)
-            {
-                Console.WriteLine("WARNING: Invalid signature detected - message may be tampered!");
-            }
-            else
-            {
-                Console.WriteLine("Verification Successful");
-            }
+            // if (!isValid)
+            // {
+            //     Console.WriteLine("WARNING: Invalid signature detected - message may be tampered!");
+            // }
+            // else
+            // {
+            //     Console.WriteLine("Verification Successful");
+            // }
             return isValid;
         }
         catch (CryptographicException ex)
