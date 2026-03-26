@@ -169,12 +169,9 @@ Subsequent messages use JSON:
 | Test | Expected Result | Actual Result | Pass/Fail |
 |------|-----------------|---------------|-----------|
 | Messages are encrypted on wire | Cannot read plaintext in network capture | Messages are sent with EncryptedContent field containing Base64-encoded AES ciphertext; Content field is empty on the wire. Plaintext is only visible after decryption. | Pass |
-
 | Key exchange completes | Both peers have shared session key | Client and server successfully exchange RSA public keys and establish a shared AES-256 session key; encrypted messages are decrypted correctly on both sides. | Pass |
-
 | Tampered message rejected | Signature verification fails, message rejected | When signature bytes are flipped (simulated tampering), receiver prints "Rejecting tampered message" and drops the message. | Pass |
-
-| Different keys per conversation | Each peer pair has unique AES keys | | | 
+| Different keys per conversation | Each peer pair has unique AES keys | Session keys are captured for different peer-to-peer connections and one session key does not allow decryption of messages in other connections. | Pass | 
 
 ---
 
@@ -182,7 +179,7 @@ Subsequent messages use JSON:
 
 | Issue | Description | Workaround |
 |-------|-------------|------------|
-None for now. 
+None for now.
 
 ---
 
