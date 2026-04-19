@@ -32,6 +32,7 @@ public class TcpClientHandler
     // public event Action<string, Peer>? OnJoinRoom;
     public Peer? _CurrentPeer { get; private set; }
     private KeyExchange? _keyExchange;
+    public int LocalPort { get; set; }
 
     /// <summary>
     /// Connect to a peer at the specified address and port.
@@ -51,7 +52,7 @@ public class TcpClientHandler
     /// 7. Return true on success
     /// 8. Handle SocketException - print error and return false
     /// </summary>
-    public async Task<bool> ConnectAsync(string host, int port)
+    public async Task<bool> ConnectAsync(string host, int port, string name)
     {
         try
         {
@@ -88,16 +89,19 @@ public class TcpClientHandler
             // Console.WriteLine($"Client AES key: {Convert.ToBase64String(peer.AesKey!)}");
 
             // prompt for name
-            OnConnected?.Invoke(peer);
-            Console.Write("What is your name? ");
-            string? name = Console.ReadLine();
+            // Console.Write("What is your name? ");
+            // string? name = Console.ReadLine();
             await writer.WriteLineAsync(name);
+            await writer.WriteLineAsync(LocalPort.ToString());
+            await writer.WriteLineAsync(peer.Id); // add this
             await writer.FlushAsync();
 
             lock (_lock)
             {
-                _connections[host] = peer;
+                _connections[peer.Id] = peer;
             }
+            string? remoteName = await reader.ReadLineAsync();
+            peer.Name = remoteName!;
             OnConnected?.Invoke(peer);
             _ = Task.Run(() => ReceiveLoop(peer, reader)); // run for lifetime of connection
             return true;

@@ -36,6 +36,9 @@ public class TcpServer
     public bool IsListening { get; private set; }
     public Dictionary<string, List<string>> _rooms = new();
     private readonly RsaEncryption _rsa = new RsaEncryption();    /// <summary>
+    // keep a table of known peers
+    private readonly Dictionary<string, Peer> _knownPeers = new();
+    public string LocalName { get; set; } = string.Empty;
     /// Start listening for incoming connections on the specified port.
     ///
     /// TODO: Implement the following:
@@ -46,16 +49,17 @@ public class TcpServer
     /// 5. Create and start a new Thread running ListenLoop
     /// 6. Print a message indicating the server is listening
     /// </summary>
-    public void Start(int port)
+    public void Start()
     {
-        Port = port;
+        // Port = port;
         _cancellationTokenSource = new CancellationTokenSource();
-        _listener = new TcpListener(IPAddress.Any, port);
+        _listener = new TcpListener(IPAddress.Any, 0);
         _listener.Start();
+        Port = ((IPEndPoint)_listener.LocalEndpoint).Port; // move this after Start()
         IsListening = true;
         _listenThread = new Thread(ListenLoop);
         _listenThread.Start();
-        Console.WriteLine($"Server listening on port {port}.");
+        Console.WriteLine($"Server listening on port {_listener.LocalEndpoint}.");
     }
 
     /// <summary>
@@ -165,7 +169,16 @@ public class TcpServer
 
             // now read name
             string? name = streamReader.ReadLine();
+            string? portStr = streamReader.ReadLine();
+            string? pId = streamReader.ReadLine();
+            peer.Id = pId!;
+            peer.Port = int.Parse(portStr!);
             peer.Name = name;
+            // send back name to client
+            using var nameWriter = new StreamWriter(peer.Stream, leaveOpen: true);
+            nameWriter.WriteLine(LocalName);
+            nameWriter.WriteLine(peer.Id); // add this - but this is the connecting peer's ID, wrong
+            nameWriter.Flush();
             OnPeerConnected?.Invoke(peer);
             while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
             {

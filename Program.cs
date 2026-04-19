@@ -7,6 +7,7 @@
 // (Continue enhancing in Sprints 2 & 3)
 //
 
+using System.Collections.Concurrent;
 using SecureMessenger.Core;
 using SecureMessenger.Network;
 using SecureMessenger.Security;
@@ -63,11 +64,23 @@ class Program
     private static TcpClientHandler? _tcpClientHandler;
     private static ConsoleUI? _consoleUI;
     private static CancellationTokenSource? _cancellationTokenSource;
+    private static ConcurrentDictionary<string, Peer>? _peers = new();
+    private static PeerDiscovery? _peerDiscovery;
+    private static string? _localName;
+
     
     static async Task Main(string[] args)
     {
         Console.WriteLine("Secure Distributed Messenger");
         Console.WriteLine("============================");
+
+        Console.Write("Enter your name: ");
+        _localName = Console.ReadLine();
+        while (string.IsNullOrWhiteSpace(_localName))
+        {
+            Console.Write("Name cannot be empty. Enter your name: ");
+            _localName = Console.ReadLine();
+        }
 
         _cancellationTokenSource = new CancellationTokenSource();
         _messageQueue = new MessageQueue();
@@ -80,6 +93,7 @@ class Program
 
         _tcpServer.OnPeerConnected += (peer) =>
         {
+            _peers[peer.Id] = peer;
             _consoleUI.DisplaySystem($"Peer connected: {peer.Name}");
         };
         _tcpServer.OnMessageReceived += async (peer, message) =>
@@ -100,16 +114,20 @@ class Program
                 // _tcpServer.SendToPeerAsync(senderMsg);
             }
             else
-                _tcpServer.BroadcastAsync(message);
+            {
+                _messageQueue.EnqueueIncoming(message);
+            }
             
         };
         _tcpServer.OnPeerDisconnected += (peer) =>
         {
+            _peers.TryRemove(peer.Id, out _);
             _consoleUI.DisplaySystem($"Peer disconnected: {peer.Name}");
         };
         _tcpClientHandler.OnConnected += (peer) =>
         {
-            _consoleUI.DisplaySystem("Connected to server.");
+            _peers[peer.Id] = peer;
+            _consoleUI.DisplaySystem("Connected to peer.");
         };
         _tcpClientHandler.OnMessageReceived += (peer, message) =>
         {   
@@ -121,6 +139,7 @@ class Program
         };
         _tcpClientHandler.OnDisconnected += (peer) =>
         {
+            _peers.TryRemove(peer.Id, out _);
             _consoleUI.DisplaySystem($"Disconnected from server.");
         };
         // _tcpClientHandler.OnJoinRoom += (roomName, peer) =>
@@ -128,6 +147,30 @@ class Program
         //     _tcpServer.JoinRoom(roomName, peer.Id);
         //     _consoleUI.DisplaySystem($"Joined room: {roomName}");
         // };
+
+        _tcpServer.Start();
+        _tcpServer.LocalName = _localName!;
+        _tcpClientHandler.LocalPort = _tcpServer.Port;
+        Console.WriteLine($"Your port: {_tcpServer.Port} - share this with peers to connect");
+
+        _peerDiscovery = new PeerDiscovery();
+        _peerDiscovery.OnPeerDiscovered += async (peer) =>
+        {
+            if (peer.Id == _peerDiscovery.LocalPeerId) return;
+
+            if (string.Compare(_peerDiscovery.LocalPeerId, peer.Id) >= 0) return;
+
+            if (_peers.ContainsKey(peer.Id)) return;
+            
+            await _tcpClientHandler.ConnectAsync(peer.Address.ToString(), peer.Port, _localName!);
+        };
+        _peerDiscovery.OnPeerLost += (peer) =>
+        {
+            _consoleUI.DisplaySystem($"Peer {peer.Id} lost.");
+        };
+        _peerDiscovery.Start(_tcpServer.Port);
+
+
 
         Console.WriteLine("Type /help for available commands");
         Console.WriteLine();
@@ -152,9 +195,9 @@ class Program
             CommandResult commandResult = _consoleUI.ParseCommand(input);
             if (!commandResult.IsCommand)
             {
-                if (!_tcpClientHandler.GetConnectedPeers().Any())
+                if (!_peers.Any())
                 {
-                    Console.WriteLine("Join a chat to send messages.");
+                    Console.WriteLine("No peers connected.");
                     continue;
                 }
                 _messageQueue.EnqueueOutgoing(new Message { Content = commandResult.Message! });
@@ -165,17 +208,20 @@ class Program
             switch (commandResult.CommandType)
             {   
                 case CommandType.Connect:
-                    await _tcpClientHandler.ConnectAsync(commandResult.Args[0], int.Parse(commandResult.Args[1]));
-                    break;
-                case CommandType.Listen:
-                    _tcpServer.Start(int.Parse(commandResult.Args[0]));
+                    string connectHost = commandResult.Args[0];
+                    int connectPort = int.Parse(commandResult.Args[1]);
+                    if (_peers.Values.Any(p => p.Port == connectPort))
+                    {
+                        Console.WriteLine("Already connected to that peer.");
+                        break;
+                    }
+                    await _tcpClientHandler.ConnectAsync(connectHost, connectPort, _localName!);
                     break;
                 case CommandType.ListPeers:
-                    var peers = _tcpServer.GetConnectedPeers();
                     Console.WriteLine("Connected Peers:");
-                    foreach (var peer in peers)
+                    foreach (var peer in _peers.Values)
                     {
-                        Console.WriteLine($"- {peer.Name}");
+                        Console.WriteLine($"- {peer.Name} ({peer.Address}:{peer.Port})");
                     }
                     break;
                 case CommandType.History:
@@ -225,6 +271,7 @@ class Program
             _tcpClientHandler.Disconnect(peer.Id);
         }
         _messageQueue.CompleteAdding();
+        _peerDiscovery.Stop();
         _tcpServer.Stop();
         Console.WriteLine("Goodbye!");
     }
@@ -266,24 +313,40 @@ class Program
             try
             {
                 var message = _messageQueue.DequeueOutgoing(ct);
-
-                if (message.Type == MessageType.RoomMessage)
-                {
-                    await _tcpClientHandler.BroadcastAsync(message);
-                }
-                else if (message.Type == MessageType.Text)
-                {
-                    await _tcpClientHandler.BroadcastAsync(message);
-                }
-                else if (message.Type == MessageType.Command)
-                {
-                    await _tcpClientHandler.BroadcastAsync(message);
-                }
+                message.Sender = _localName; // or whatever local name
+                // _consoleUI.DisplayMessage(message); // display locally
+                await BroadcastToPeers(message);
             }
             catch (OperationCanceledException)
             {
                 break;
             }
         }
+    }
+    private static async Task BroadcastToPeers(Message message)
+    {
+        var tasks = _peers.Values
+            .Where(p => p.IsConnected && p.Stream != null)
+            .Select(async peer =>
+            {
+                try
+                {
+                    if (_tcpServer.GetConnectedPeers().Any(p => p.Id == peer.Id))
+                    {
+                        message.TargetPeerId = peer.Id;
+                        await _tcpServer.SendToPeerAsync(message);
+                    }
+                    else
+                    {
+                        await _tcpClientHandler.SendAsync(peer.Id, message);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _consoleUI.DisplaySystem($"Error sending to {peer.Id}: {ex.Message}");
+                }
+            });
+
+        await Task.WhenAll(tasks);
     }
 }
