@@ -171,7 +171,7 @@ public class TcpClientHandler
         finally
         {
             reader.Dispose();
-            Disconnect(peer.Address.ToString());
+            Disconnect(peer.Id);
         }
     }
 
@@ -238,8 +238,8 @@ public class TcpClientHandler
         }
         foreach (var peer in peersToMessage)
         {
-            string peerId = peer.Address.ToString();
-            await SendAsync(peerId, message);
+            // string peerId = peer.Address.ToString();
+            await SendAsync(peer.Id, message);
         }
     }
 

@@ -25,7 +25,8 @@ namespace SecureMessenger.Network;
 /// </summary>
 public class PeerDiscovery
 {
-    private UdpClient? _udpClient;
+    private UdpClient? _listenClient;
+    private UdpClient? _sendClient;
     private CancellationTokenSource? _cancellationTokenSource;
     private readonly ConcurrentDictionary<string, Peer> _knownPeers = new();
     private readonly int _broadcastPort = 5001;
@@ -54,10 +55,13 @@ public class PeerDiscovery
     {
         TcpPort = tcpPort;
         _cancellationTokenSource = new CancellationTokenSource();
-        _udpClient = new UdpClient();
-        _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-        _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, _broadcastPort));
-        _udpClient.EnableBroadcast = true;
+        _listenClient = new UdpClient();
+        _listenClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        _listenClient.Client.Bind(new IPEndPoint(IPAddress.Any, _broadcastPort));
+        _listenClient.EnableBroadcast = true;
+
+        _sendClient = new UdpClient();
+        _sendClient.EnableBroadcast = true;
         _listenThread = new Thread(ListenLoop);
         _listenThread.Start();
         _broadcastThread = new Thread(BroadcastLoop);
@@ -86,7 +90,7 @@ public class PeerDiscovery
             {
                 var message = $"PEER:{LocalPeerId}:{TcpPort}";
                 var data = Encoding.UTF8.GetBytes(message);
-                _udpClient.Send(data, data.Length, broadcastEndpoint);
+                _sendClient.Send(data, data.Length, broadcastEndpoint);
             }
             catch (SocketException)
             {
@@ -115,7 +119,7 @@ public class PeerDiscovery
         {
             try
             {
-                var data = _udpClient.Receive(ref receiveEndpoint);
+                var data = _listenClient!.Receive(ref receiveEndpoint);
                 var message = Encoding.UTF8.GetString(data);
                 if (message.StartsWith("PEER:"))
                 {
@@ -217,7 +221,8 @@ public class PeerDiscovery
     public void Stop()
     {
         _cancellationTokenSource?.Cancel();
-        _udpClient?.Close();
+        _listenClient?.Close();
+        _sendClient?.Close();
         _listenThread?.Join(1000);
         _broadcastThread?.Join(1000);
     }

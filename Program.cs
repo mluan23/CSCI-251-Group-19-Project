@@ -8,6 +8,7 @@
 //
 
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
 using SecureMessenger.Core;
 using SecureMessenger.Network;
 using SecureMessenger.Security;
@@ -67,6 +68,7 @@ class Program
     private static ConcurrentDictionary<string, Peer>? _peers = new();
     private static PeerDiscovery? _peerDiscovery;
     private static string? _localName;
+    private static readonly HashSet<string> _pendingConnections = new();
 
     
     static async Task Main(string[] args)
@@ -94,7 +96,8 @@ class Program
         _tcpServer.OnPeerConnected += (peer) =>
         {
             _peers[peer.Id] = peer;
-            _consoleUI.DisplaySystem($"Peer connected: {peer.Name}");
+            _consoleUI.DisplaySystem($"Connected to peer: {peer.Name}");
+            // Console.WriteLine(_peers);
         };
         _tcpServer.OnMessageReceived += async (peer, message) =>
         {
@@ -127,7 +130,7 @@ class Program
         _tcpClientHandler.OnConnected += (peer) =>
         {
             _peers[peer.Id] = peer;
-            _consoleUI.DisplaySystem("Connected to peer.");
+            _consoleUI.DisplaySystem("Connected to peer: " + peer.Name);
         };
         _tcpClientHandler.OnMessageReceived += (peer, message) =>
         {   
@@ -151,22 +154,29 @@ class Program
         _tcpServer.Start();
         _tcpServer.LocalName = _localName!;
         _tcpClientHandler.LocalPort = _tcpServer.Port;
-        Console.WriteLine($"Your port: {_tcpServer.Port} - share this with peers to connect");
+        // Console.WriteLine($"Your port: {_tcpServer.Port} - share this with peers to connect");
 
         _peerDiscovery = new PeerDiscovery();
         _peerDiscovery.OnPeerDiscovered += async (peer) =>
         {
             if (peer.Id == _peerDiscovery.LocalPeerId) return;
-
             if (string.Compare(_peerDiscovery.LocalPeerId, peer.Id) >= 0) return;
-
             if (_peers.ContainsKey(peer.Id)) return;
-            
+
+            lock (_pendingConnections)
+            {
+                if (_pendingConnections.Contains(peer.Id)) return;
+                _pendingConnections.Add(peer.Id);
+            }
+
             await _tcpClientHandler.ConnectAsync(peer.Address.ToString(), peer.Port, _localName!);
+
+            lock (_pendingConnections)
+                _pendingConnections.Remove(peer.Id);
         };
         _peerDiscovery.OnPeerLost += (peer) =>
         {
-            _consoleUI.DisplaySystem($"Peer {peer.Id} lost.");
+            _consoleUI.DisplaySystem($"Peer {peer.Name} lost (no broadcast in 30s).");
         };
         _peerDiscovery.Start(_tcpServer.Port);
 
@@ -211,6 +221,11 @@ class Program
                     string connectHost = commandResult.Args[0];
                     int connectPort = int.Parse(commandResult.Args[1]);
                     if (_peers.Values.Any(p => p.Port == connectPort))
+                    {
+                        Console.WriteLine("Already connected to that peer.");
+                        break;
+                    }
+                    if (_peers.Values.Any(p => p.Address?.ToString() == connectHost && p.Port == connectPort))
                     {
                         Console.WriteLine("Already connected to that peer.");
                         break;
@@ -314,7 +329,7 @@ class Program
             {
                 var message = _messageQueue.DequeueOutgoing(ct);
                 message.Sender = _localName; // or whatever local name
-                // _consoleUI.DisplayMessage(message); // display locally
+                _consoleUI.DisplayMessage(message);
                 await BroadcastToPeers(message);
             }
             catch (OperationCanceledException)
@@ -331,10 +346,21 @@ class Program
             {
                 try
                 {
+                    // stupid shit trying to use client and server classes instead of a dedicated peer
+                    // who is the one who initiaited this connection
                     if (_tcpServer.GetConnectedPeers().Any(p => p.Id == peer.Id))
                     {
-                        message.TargetPeerId = peer.Id;
-                        await _tcpServer.SendToPeerAsync(message);
+                        var msgCopy = new Message
+                        {
+                            Id = message.Id,
+                            Sender = message.Sender,
+                            Content = message.Content,
+                            Timestamp = message.Timestamp,
+                            Type = message.Type,
+                            Room = message.Room,
+                            TargetPeerId = peer.Id
+                        };
+                        await _tcpServer.SendToPeerAsync(msgCopy);
                     }
                     else
                     {

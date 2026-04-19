@@ -55,7 +55,7 @@ public class TcpServer
         _cancellationTokenSource = new CancellationTokenSource();
         _listener = new TcpListener(IPAddress.Any, 0);
         _listener.Start();
-        Port = ((IPEndPoint)_listener.LocalEndpoint).Port; // move this after Start()
+        Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         IsListening = true;
         _listenThread = new Thread(ListenLoop);
         _listenThread.Start();
@@ -177,7 +177,7 @@ public class TcpServer
             // send back name to client
             using var nameWriter = new StreamWriter(peer.Stream, leaveOpen: true);
             nameWriter.WriteLine(LocalName);
-            nameWriter.WriteLine(peer.Id); // add this - but this is the connecting peer's ID, wrong
+            // nameWriter.WriteLine(peer.Id)
             nameWriter.Flush();
             OnPeerConnected?.Invoke(peer);
             while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
