@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Aveinn Swar
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 3: P2P & Advanced Features
@@ -66,7 +66,36 @@ public class ReconnectionPolicy
     /// </summary>
     public async Task<bool> TryReconnect(Peer peer)
     {
-        throw new NotImplementedException("Implement TryReconnect() - see TODO in comments above");
+        int attempt = GetAttemptCount(peer.Id);
+        while (attempt < MaxAttempts)
+        {
+            attempt++;
+            _attemptCount[peer.Id] = attempt;
+            OnReconnectAttempt?.Invoke(peer.Id, attempt);
+            // Exponential backoff
+            int delay = (int)Math.Min(InitialDelayMs * Math.Pow(2, attempt - 1), MaxDelayMs);
+            try
+            {
+                bool success = await _clientHandler.ConnectAsync(peer.IpAddress, peer.Port);
+                if (success)
+                {
+                    ResetAttempts(peer.Id);
+                    OnReconnectSuccess?.Invoke(peer.Id);
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Connection attempt {attempt} failed for {peer.Id}: {ex.Message}");
+            }
+            if (attempt < MaxAttempts)
+            {
+                await Task.Delay(delay);
+            }
+        }
+        Console.WriteLine($"Reconnection failed for {peer.Id} after {MaxAttempts} attempts.");
+        OnReconnectFailed?.Invoke(peer.Id);
+        return false;
     }
 
     /// <summary>
@@ -78,7 +107,7 @@ public class ReconnectionPolicy
     /// </summary>
     public void ResetAttempts(string peerId)
     {
-        throw new NotImplementedException("Implement ResetAttempts() - see TODO in comments above");
+        _attemptCount.TryRemove(peerId, out _);
     }
 
     /// <summary>
@@ -90,6 +119,13 @@ public class ReconnectionPolicy
     /// </summary>
     public int GetAttemptCount(string peerId)
     {
-        throw new NotImplementedException("Implement GetAttemptCount() - see TODO in comments above");
+        if (_attemptCount.TryGetValue(peerId, out int count))
+        {
+            return count;
+        }
+        else
+        {
+            return 0;
+        }
     }
 }
