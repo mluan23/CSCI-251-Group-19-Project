@@ -69,6 +69,7 @@ class Program
     private static PeerDiscovery? _peerDiscovery;
     private static string? _localName;
     private static readonly HashSet<string> _pendingConnections = new();
+    private static MessageHistory? _messageHistory;
 
     
     static async Task Main(string[] args)
@@ -89,6 +90,7 @@ class Program
         _consoleUI = new ConsoleUI(_messageQueue);
         _tcpServer = new TcpServer();
         _tcpClientHandler = new TcpClientHandler();
+        _messageHistory = new MessageHistory();
 
         _ = Task.Run(() => ProcessIncomingMessages(_cancellationTokenSource.Token));
         _ = Task.Run(() => ProcessOutgoingMessages(_cancellationTokenSource.Token));
@@ -133,12 +135,13 @@ class Program
             _consoleUI.DisplaySystem("Connected to peer: " + peer.Name);
         };
         _tcpClientHandler.OnMessageReceived += (peer, message) =>
-        {   
+        {
             if (message.Content.StartsWith("Created Rooms:"))
             {
                 return;
             }
             _consoleUI.DisplayMessage(message);
+            _messageHistory.SaveMessage(message);
         };
         _tcpClientHandler.OnDisconnected += (peer) =>
         {
@@ -240,9 +243,8 @@ class Program
                     }
                     break;
                 case CommandType.History:
-                    // DisplayHistory() needs to be implemented during Sprint 3
-                    //_consoleUI.DisplayHistory();
-                    break; 
+                    _messageHistory.ShowHistory();
+                    break;
                 case CommandType.Quit:
                     running = false;
                     break;
@@ -314,6 +316,7 @@ class Program
             {
                 var message = _messageQueue.DequeueIncoming(ct);
                 _consoleUI.DisplayMessage(message);
+                _messageHistory?.SaveMessage(message);
             }
             catch (OperationCanceledException)
             {
@@ -330,6 +333,7 @@ class Program
                 var message = _messageQueue.DequeueOutgoing(ct);
                 message.Sender = _localName; // or whatever local name
                 _consoleUI.DisplayMessage(message);
+                _messageHistory?.SaveMessage(message);
                 await BroadcastToPeers(message);
             }
             catch (OperationCanceledException)

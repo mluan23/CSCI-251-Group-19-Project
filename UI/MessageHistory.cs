@@ -1,4 +1,4 @@
-// [Your Name Here]
+// Aman Shah
 // CSCI 251 - Secure Distributed Messenger
 //
 // SPRINT 3: P2P & Advanced Features
@@ -10,129 +10,101 @@ using SecureMessenger.Core;
 
 namespace SecureMessenger.UI;
 
-/// <summary>
-/// Sprint 3: Message history storage and retrieval.
-/// Persists messages to a JSON file for retrieval across sessions.
-///
-/// Features:
-/// - Thread-safe message storage
-/// - JSON serialization/deserialization
-/// - Automatic loading on startup
-/// - Configurable history display limit
-///
-/// File Format: JSON array of Message objects
-/// Default file: "message_history.json"
-/// </summary>
+// saves messages to a json file so we can view them later with /history
 public class MessageHistory
 {
     private readonly string _historyFile;
     private readonly List<Message> _messages = new();
     private readonly object _lock = new();
 
-    /// <summary>
-    /// Create a MessageHistory with optional custom file path.
-    /// Automatically loads existing history from file.
-    ///
-    /// TODO: Implement the following:
-    /// 1. Store the history file path
-    /// 2. Call Load() to load existing history
-    /// </summary>
     public MessageHistory(string historyFile = "message_history.json")
     {
-        throw new NotImplementedException("Implement constructor - see TODO in comments above");
+        _historyFile = historyFile;
+        Load();
     }
 
-    /// <summary>
-    /// Save a message to history and persist to file.
-    ///
-    /// TODO: Implement the following:
-    /// 1. Lock on _lock for thread safety
-    /// 2. Add the message to _messages list
-    /// 3. Call PersistToFile() to save to disk
-    /// </summary>
+    // add message to list + write to file
     public void SaveMessage(Message message)
     {
-        throw new NotImplementedException("Implement SaveMessage() - see TODO in comments above");
+        lock (_lock)
+        {
+            _messages.Add(message);
+            PersistToFile();
+        }
     }
 
-    /// <summary>
-    /// Load history from file on startup.
-    ///
-    /// TODO: Implement the following:
-    /// 1. Check if the history file exists
-    /// 2. If it exists:
-    ///    a. Read the file contents as a string
-    ///    b. Deserialize from JSON to List<Message>
-    ///    c. Lock on _lock and replace _messages with loaded data
-    /// 3. Handle exceptions (file errors, JSON errors):
-    ///    a. Print error message but don't crash
-    ///    b. Start with empty history if load fails
-    ///
-    /// Hint: Use JsonSerializer.Deserialize<List<Message>>()
-    /// </summary>
+    // read history from file on startup so old messages show up
     public void Load()
     {
-        throw new NotImplementedException("Implement Load() - see TODO in comments above");
+        try
+        {
+            if (!File.Exists(_historyFile)) return;
+
+            string json = File.ReadAllText(_historyFile);
+            var loaded = JsonSerializer.Deserialize<List<Message>>(json);
+            if (loaded == null) return;
+
+            lock (_lock)
+            {
+                _messages.Clear();
+                _messages.AddRange(loaded);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load history: {ex.Message}");
+        }
     }
 
-    /// <summary>
-    /// Write the current messages to the history file.
-    ///
-    /// TODO: Implement the following:
-    /// 1. Serialize _messages to JSON
-    ///    - Use JsonSerializerOptions with WriteIndented = true for readability
-    /// 2. Write the JSON string to the history file
-    /// 3. Handle exceptions:
-    ///    a. Print error message but don't crash
-    ///
-    /// Note: This is called while holding _lock, so don't lock again
-    /// </summary>
+    // write everything to disk (called while holding the lock already)
     private void PersistToFile()
     {
-        throw new NotImplementedException("Implement PersistToFile() - see TODO in comments above");
+        try
+        {
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(_messages, options);
+            File.WriteAllText(_historyFile, json);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to save history: {ex.Message}");
+        }
     }
 
-    /// <summary>
-    /// Get messages from history.
-    ///
-    /// TODO: Implement the following:
-    /// 1. Lock on _lock for thread safety
-    /// 2. Order messages by Timestamp descending (newest first)
-    /// 3. If limit is specified, take only that many messages
-    /// 4. Return as a new List (don't return the internal list)
-    ///
-    /// Hint: Use LINQ OrderByDescending, Take, and ToList
-    /// </summary>
+    // newest first, optionally capped to a limit
     public IEnumerable<Message> GetHistory(int? limit = null)
     {
-        throw new NotImplementedException("Implement GetHistory() - see TODO in comments above");
+        lock (_lock)
+        {
+            var ordered = _messages.OrderByDescending(m => m.Timestamp);
+            if (limit.HasValue)
+                return ordered.Take(limit.Value).ToList();
+            return ordered.ToList();
+        }
     }
 
-    /// <summary>
-    /// Display history to console.
-    ///
-    /// TODO: Implement the following:
-    /// 1. Print a header: "--- Message History (last N messages) ---"
-    /// 2. Get history with the specified limit
-    /// 3. Reverse the order (so oldest is first, newest is last)
-    /// 4. Print each message using its ToString()
-    /// 5. Print a footer: "--- End of History ---"
-    /// </summary>
+    // print the messages in chat order (oldest -> newest)
     public void ShowHistory(int limit = 50)
     {
-        throw new NotImplementedException("Implement ShowHistory() - see TODO in comments above");
+        Console.WriteLine($"--- Message History (last {limit} messages) ---");
+        foreach (var message in GetHistory(limit).Reverse())
+        {
+            Console.WriteLine(message.ToString());
+        }
+        Console.WriteLine("--- End of History ---");
     }
 
-    /// <summary>
-    /// Clear all history from memory and disk.
-    ///
-    /// TODO: Implement the following:
-    /// 1. Lock on _lock for thread safety
-    /// 2. Clear the _messages list
-    /// 3. Delete the history file if it exists
-    /// </summary>
+    // wipe everything (not currently wired to a command but useful for testing)
     public void Clear()
     {
-        throw new NotImplementedException("Implement Clear() - see TODO in comments above");
+        lock (_lock)
+        {
+            _messages.Clear();
+            if (File.Exists(_historyFile))
+            {
+                try { File.Delete(_historyFile); }
+                catch (Exception ex) { Console.WriteLine($"Failed to delete history file: {ex.Message}"); }
+            }
+        }
     }
 }
