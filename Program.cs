@@ -65,9 +65,11 @@ class Program
     private static TcpClientHandler? _tcpClientHandler;
     private static ConsoleUI? _consoleUI;
     private static CancellationTokenSource? _cancellationTokenSource;
-    private static ConcurrentDictionary<string, Peer>? _peers = new();
+    private static ConcurrentDictionary<string, Peer> _peers = new();
     private static PeerDiscovery? _peerDiscovery;
     private static string? _localName;
+    private static HashSet<string> _localRooms = new();
+    private static readonly HashSet<string> _networkRooms = new();
     private static readonly HashSet<string> _pendingConnections = new();
     private static MessageHistory? _messageHistory;
 
@@ -95,48 +97,176 @@ class Program
         _ = Task.Run(() => ProcessIncomingMessages(_cancellationTokenSource.Token));
         _ = Task.Run(() => ProcessOutgoingMessages(_cancellationTokenSource.Token));
 
-        _tcpServer.OnPeerConnected += (peer) =>
+        _tcpServer.OnPeerConnected += async (peer) =>
         {
-            _peers[peer.Id] = peer;
-            _consoleUI.DisplaySystem($"Connected to peer: {peer.Name}");
-            // Console.WriteLine(_peers);
+
+            var publicKey = peer.KeyExchange.GetPublicKey();
+
+            _consoleUI.DisplaySystem($"Connected (awaiting secure channel...)");
+
+            await _tcpServer.SendToPeerAsync(new Message
+            {
+                Type = MessageType.KeyExchange,
+                PublicKey = publicKey,
+                TargetPeerId = peer.Id
+            });
         };
         _tcpServer.OnMessageReceived += async (peer, message) =>
         {
-            // idk if awaiting will be needed for the future but leaving this note incase we get some broken stuff in the future and that fixes anything
+            if (message.Type == MessageType.NameExchange)
+            {
+                peer.Name = message.Content;
+
+                var existing = _peers.Values.FirstOrDefault(p => p.Name == peer.Name && p.Id != peer.Id);
+
+                if (existing != null)
+                {
+                    return;
+                }
+
+                _peers[peer.Id] = peer;
+                _consoleUI.DisplaySystem($"Peer identified as: {peer.Name}");
+
+                return;
+            }
+
+            if (message.Type == MessageType.KeyExchange)
+            {
+                await HandleKeyExchange(peer, message);
+                return;
+            }
+
+
+            if (message.Type == MessageType.Command)
+            {
+                HandleCommandMessage(peer, message);
+                return;
+            }
+
             message.Sender = peer.Name;
 
-            if (message.TargetPeerId != null)
+            if (message.Type == MessageType.PrivateMessage)
             {
-                _tcpServer.SendToPeerAsync(message);
-                // Message senderMsg = new Message
-                // {
-                //     Content = message.Content,
-                //     Sender = message.Sender,
-                //     TargetPeerId = peer.Id
-                // };
-                // // send back the msg to the sender
-                // _tcpServer.SendToPeerAsync(senderMsg);
+                if (peer.Aes == null)
+                {
+                    _consoleUI.DisplaySystem("No AES key for this connection");
+                    return;
+                }
+
+                if (message.EncryptedContent == null)
+                {
+                    _consoleUI.DisplaySystem("Missing encrypted payload");
+                    return;
+                }
+
+                try
+                {
+                    message.Content = peer.Aes.Decrypt(message.EncryptedContent);
+                }
+                catch
+                {
+                    _consoleUI.DisplaySystem("Failed to decrypt message");
+                    return;
+                }
             }
-            else
+
+            if (message.Type == MessageType.RoomMessage && !_localRooms.Contains(message.Room))
             {
-                _messageQueue.EnqueueIncoming(message);
+                return;
             }
-            
+
+            _messageQueue.EnqueueIncoming(message);
+
         };
+
         _tcpServer.OnPeerDisconnected += (peer) =>
         {
             _peers.TryRemove(peer.Id, out _);
-            _consoleUI.DisplaySystem($"Peer disconnected: {peer.Name}");
+            var name = string.IsNullOrWhiteSpace(peer.Name) ? "Unknown" : peer.Name;
+            _consoleUI.DisplaySystem($"Peer disconnected: {name}");
         };
-        _tcpClientHandler.OnConnected += (peer) =>
+
+        _tcpClientHandler.OnConnected += async (peer) =>
         {
-            _peers[peer.Id] = peer;
-            _consoleUI.DisplaySystem("Connected to peer: " + peer.Name);
+            var publicKey = peer.KeyExchange.GetPublicKey();
+
+            _consoleUI.DisplaySystem("Connected (awaiting identity...)");
+
+            await _tcpClientHandler.SendAsync(peer.Id, new Message
+            {
+                Type = MessageType.KeyExchange,
+                PublicKey = publicKey
+            });
+
+            await _tcpClientHandler.SendAsync(peer.Id, new Message
+            {
+                Type = MessageType.NameExchange,
+                Content = _localName
+            });
         };
-        _tcpClientHandler.OnMessageReceived += (peer, message) =>
+        _tcpClientHandler.OnMessageReceived += async (peer, message) =>
         {
+            if (message.Type == MessageType.NameExchange)
+            {
+                peer.Name = message.Content;
+
+                var existing = _peers.Values.FirstOrDefault(p => p.Name == peer.Name && p.Id != peer.Id);
+                
+                if (existing != null)
+                {
+                    return;
+                }
+
+                _peers[peer.Id] = peer;
+
+                _consoleUI.DisplaySystem($"Peer identified as: {peer.Name}");
+
+                return;
+            }
+
+            if(message.Type == MessageType.KeyExchange)
+            {
+                await HandleKeyExchange(peer, message);
+                return;
+            }
+
+            if(message.Type == MessageType.Command)
+            {
+                message.Sender ??= peer.Name;
+                HandleCommandMessage(peer, message);
+                return;
+            }
+
             if (message.Content.StartsWith("Created Rooms:"))
+            {
+                return;
+            }
+            if (message.Type == MessageType.PrivateMessage)
+            {
+
+                if (peer.Aes == null)
+                {
+                    _consoleUI.DisplaySystem("No AES key for this connection");
+                    return;
+                }
+
+                if (message.EncryptedContent == null)
+                {
+                    _consoleUI.DisplaySystem("Missing encrypted payload");
+                    return;
+                }
+
+                try
+                {
+                    message.Content = peer.Aes.Decrypt(message.EncryptedContent);
+                }
+                catch
+                {
+                    _consoleUI.DisplaySystem("Failed to decrypt message");
+                    return;
+                }
+            }
+            if (message.Type == MessageType.RoomMessage && !_localRooms.Contains(message.Room))
             {
                 return;
             }
@@ -159,12 +289,15 @@ class Program
         _tcpClientHandler.LocalPort = _tcpServer.Port;
         // Console.WriteLine($"Your port: {_tcpServer.Port} - share this with peers to connect");
 
-        _peerDiscovery = new PeerDiscovery();
+        _peerDiscovery = new PeerDiscovery(
+            () => _localName!,
+            () => _localRooms
+        );
         _peerDiscovery.OnPeerDiscovered += async (peer) =>
         {
             if (peer.Id == _peerDiscovery.LocalPeerId) return;
-            if (string.Compare(_peerDiscovery.LocalPeerId, peer.Id) >= 0) return;
             if (_peers.ContainsKey(peer.Id)) return;
+            if (_pendingConnections.Contains(peer.Id)) return;
 
             lock (_pendingConnections)
             {
@@ -172,7 +305,7 @@ class Program
                 _pendingConnections.Add(peer.Id);
             }
 
-            await _tcpClientHandler.ConnectAsync(peer.Address.ToString(), peer.Port, _localName!);
+            await _tcpClientHandler.ConnectAsync(peer.Address!.ToString(), peer.Port, _localName!);
 
             lock (_pendingConnections)
                 _pendingConnections.Remove(peer.Id);
@@ -213,8 +346,11 @@ class Program
                     Console.WriteLine("No peers connected.");
                     continue;
                 }
-                _messageQueue.EnqueueOutgoing(new Message { Content = commandResult.Message! });
-                //await _tcpServer.BroadcastAsync(commandResult.Message!);
+                _messageQueue.EnqueueOutgoing(new Message
+                {
+                    Content = commandResult.Message!,
+                    Type = MessageType.RoomMessage
+                });
                 continue;
             }
 
@@ -239,7 +375,8 @@ class Program
                     Console.WriteLine("Connected Peers:");
                     foreach (var peer in _peers.Values)
                     {
-                        Console.WriteLine($"- {peer.Name} ({peer.Address}:{peer.Port})");
+                        var name = string.IsNullOrWhiteSpace(peer.Name) ? "Unknown" : peer.Name;
+                        Console.WriteLine($"- {name} ({peer.Address}:{peer.Port})");
                     }
                     break;
                 case CommandType.History:
@@ -252,16 +389,69 @@ class Program
                     ShowHelp();
                     break;
                 case CommandType.CreateRoom:
-                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/create {commandResult.Args[0]}", Type = MessageType.Command });
+                    _localRooms.Add(commandResult.Args[0]);
+                    _networkRooms.Add(commandResult.Args[0]);
+                    _consoleUI.DisplaySystem($"You created room: {commandResult.Args[0]}"); 
+                    var createMsg = new Message
+                    {
+                        Content = $"/create {commandResult.Args[0]}",
+                        Type = MessageType.Command,
+                        Sender = _localName
+                    };
+                    foreach(var peer in _peers.Values)
+                    {
+                        if (_tcpServer.GetConnectedPeers().Any(sp => sp.Id == peer.Id))
+                        {
+                            createMsg.TargetPeerId = peer.Id;
+                            await _tcpServer.SendToPeerAsync(createMsg);
+                        }
+                        else
+                            await _tcpClientHandler.SendAsync(peer.Id, createMsg);
+                    }
                     break;
                 case CommandType.JoinRoom:
-                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/join {commandResult.Args[0]}", Type = MessageType.Command });
+                    _localRooms.Add(commandResult.Args[0]);
+                    _networkRooms.Add(commandResult.Args[0]);
+                    _consoleUI.DisplaySystem($"You joined room: {commandResult.Args[0]}");
+                    var joinMsg = new Message
+                    {
+                        Content = $"/join {commandResult.Args[0]}",
+                        Type = MessageType.Command,
+                        Sender = _localName
+                    };
+                    foreach(var peer in _peers.Values)
+                    {
+                        if (_tcpServer.GetConnectedPeers().Any(sp => sp.Id == peer.Id))
+                        {
+                            joinMsg.TargetPeerId = peer.Id;
+                            await _tcpServer.SendToPeerAsync(joinMsg);
+                        }
+                        else
+                            await _tcpClientHandler.SendAsync(peer.Id, joinMsg);
+                    }
                     break;
                 case CommandType.LeaveRoom:
-                    await _tcpClientHandler.BroadcastAsync(new Message { Content = $"/leave {commandResult.Args[0]}", Sender = "Server", Type = MessageType.Command });
+                    _localRooms.Remove(commandResult.Args[0]);
+                    _consoleUI.DisplaySystem($"You left room: {commandResult.Args[0]}");
+                    var leaveMsg = new Message
+                    {
+                        Content = $"/leave {commandResult.Args[0]}",
+                        Type = MessageType.Command,
+                        Sender = _localName
+                    };
+                    foreach(var peer in _peers.Values)
+                    {
+                        if (_tcpServer.GetConnectedPeers().Any(sp => sp.Id == peer.Id))
+                        {
+                            leaveMsg.TargetPeerId = peer.Id;
+                            await _tcpServer.SendToPeerAsync(leaveMsg);
+                        }
+                        else
+                            await _tcpClientHandler.SendAsync(peer.Id, leaveMsg);
+                    }
                     break;
                 case CommandType.MessageRoom:
-                    string room = commandResult.Args[0];
+                    string room = commandResult.Args[0].TrimStart('#');
                     string content = string.Join(" ", commandResult.Args[1..]);
                     _messageQueue.EnqueueOutgoing(new Message 
                     { 
@@ -271,10 +461,28 @@ class Program
                     });
                     break;
                 case CommandType.ListRooms:
-                    await _tcpClientHandler.BroadcastAsync(new Message { Content = "/rooms", Type = MessageType.Command });
+                    var roomList = _networkRooms.Count > 0 ? string.Join(", ", _networkRooms) : "No rooms";
+                    _consoleUI.DisplaySystem($"Network rooms: {roomList}");
                     break;
                     // _tcpServer.ListRooms();
-                    // break;
+                    //break;
+                case CommandType.MessagePeer:
+                    string targetPeerName = commandResult.Args[0][1..]; // remove @
+                    string privateContent = string.Join(" ", commandResult.Args[1..]);
+                    var targetPeer = _peers.Values.FirstOrDefault(p => p.Name == targetPeerName);
+                    if (targetPeer == null)
+                    {
+                        Console.WriteLine($"No peer found with name: {targetPeerName}");
+                        break;
+                    }
+                    _messageQueue.EnqueueOutgoing(new Message 
+                    { 
+                        Content = privateContent,
+                        TargetPeerId = targetPeer.Id,
+                        Type = MessageType.PrivateMessage,
+                        Sender = _localName
+                    });
+                    break;
                 default:
                     Console.WriteLine("not a command");
                     break;
@@ -331,7 +539,15 @@ class Program
             try
             {
                 var message = _messageQueue.DequeueOutgoing(ct);
-                message.Sender = _localName; // or whatever local name
+                message.Sender = _localName;
+
+                // Add this check before displaying:
+                if (message.Type == MessageType.RoomMessage && !_localRooms.Contains(message.Room))
+                {
+                    _consoleUI.DisplaySystem($"You are not in room: {message.Room}");
+                    continue;
+                }
+
                 _consoleUI.DisplayMessage(message);
                 _messageHistory?.SaveMessage(message);
                 await BroadcastToPeers(message);
@@ -343,40 +559,166 @@ class Program
         }
     }
     private static async Task BroadcastToPeers(Message message)
+{
+    if (message.Type == MessageType.Command)
+        return;
+
+    var targets = _peers.Values.Where(p => p.IsConnected);
+
+    var tasks = targets.Select(async peer =>
     {
-        var tasks = _peers.Values
-            .Where(p => p.IsConnected && p.Stream != null)
-            .Select(async peer =>
+        try
+        {
+            Message msgToSend;
+
+            if (message.Type == MessageType.PrivateMessage)
             {
-                try
+                if (peer.Id != message.TargetPeerId)
+                    return;
+
+                if (peer.Aes == null)
+                    return;
+
+                var encrypted = peer.Aes.Encrypt(message.Content);
+
+                msgToSend = new Message
                 {
-                    // stupid shit trying to use client and server classes instead of a dedicated peer
-                    // who is the one who initiaited this connection
-                    if (_tcpServer.GetConnectedPeers().Any(p => p.Id == peer.Id))
-                    {
-                        var msgCopy = new Message
-                        {
-                            Id = message.Id,
-                            Sender = message.Sender,
-                            Content = message.Content,
-                            Timestamp = message.Timestamp,
-                            Type = message.Type,
-                            Room = message.Room,
-                            TargetPeerId = peer.Id
-                        };
-                        await _tcpServer.SendToPeerAsync(msgCopy);
-                    }
-                    else
-                    {
-                        await _tcpClientHandler.SendAsync(peer.Id, message);
-                    }
-                }
-                catch (Exception ex)
+                    Id = message.Id,
+                    Sender = message.Sender,
+                    EncryptedContent = encrypted,
+                    Timestamp = message.Timestamp,
+                    Type = MessageType.PrivateMessage,
+                    TargetPeerId = peer.Id
+                };
+            }
+            else
+            {
+                msgToSend = new Message
                 {
-                    _consoleUI.DisplaySystem($"Error sending to {peer.Id}: {ex.Message}");
-                }
+                    Id = message.Id,
+                    Sender = message.Sender,
+                    Content = message.Content,
+                    Timestamp = message.Timestamp,
+                    Type = message.Type,
+                    Room = message.Room,
+                    TargetPeerId = peer.Id
+                };
+            }
+
+            if (_tcpServer.GetConnectedPeers().Any(p => p.Id == peer.Id))
+                await _tcpServer.SendToPeerAsync(msgToSend);
+            else
+                await _tcpClientHandler.SendAsync(peer.Id, msgToSend);
+        }
+        catch (Exception ex)
+        {
+            _consoleUI.DisplaySystem($"Error sending to {peer.Id}: {ex.Message}");
+        }
+    });
+
+    foreach (var task in tasks)
+    {
+        await task;
+    }
+    }
+
+    private static void HandleCommandMessage(Peer peer, Message message)
+    {
+        var parts = message.Content.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0) return;
+
+        string senderName = message.Sender ?? peer.Name ?? "Unknown";
+        var registeredPeer = _peers.Values.FirstOrDefault(p => p.Id == peer.Id) ?? peer;
+        
+        string command = parts[0];
+
+        if (command == "/join" && parts.Length >= 2)
+        {
+            string room = parts[1];
+            if (!registeredPeer.Rooms.Contains(room))
+                registeredPeer.Rooms.Add(room);
+
+            _consoleUI.DisplaySystem($"{senderName} joined {room}");
+        }
+        else if (command == "/leave" && parts.Length >= 2)
+        {
+            string room = parts[1];
+            registeredPeer.Rooms.Remove(room);
+            _consoleUI.DisplaySystem($"{senderName} left {room}");
+        } 
+        else if (command == "/create" && parts.Length >= 2)
+        {
+            string room = parts[1];
+            _networkRooms.Add(room);
+            if(!registeredPeer.Rooms.Contains(room))
+            {
+                registeredPeer.Rooms.Add(room);
+                _consoleUI.DisplaySystem($"{senderName} created {room}");
+            }
+            
+        }
+        else if (command == "/rooms")
+        {
+            string roomList = registeredPeer.Rooms.Count > 0 ? string.Join(", ", registeredPeer.Rooms) : "No rooms";
+            _consoleUI.DisplaySystem($"{senderName} is in rooms: {roomList}");
+        }
+    }
+    private static async Task HandleKeyExchange(Peer peer, Message message)
+    {
+        // Step 1: Receive public key
+        if (message.PublicKey != null && peer.PublicKey == null)
+        {
+            peer.PublicKey = message.PublicKey;
+            peer.KeyExchange.ReceivePublicKey(message.PublicKey);
+
+            // Send session key if we are initiator
+            var encryptedSessionKey = peer.KeyExchange.CreateEncryptedSessionKey();
+
+            await SendToPeer(peer, new Message
+            {
+                Type = MessageType.KeyExchange,
+                EncryptedSessionKey = encryptedSessionKey
             });
 
-        await Task.WhenAll(tasks);
+            peer.KeyExchange.Complete();
+            peer.Aes = new AesEncryption(peer.KeyExchange.SessionKey!);
+
+
+            await SendToPeer(peer, new Message
+            {
+                Type = MessageType.NameExchange,
+                Content = _localName
+            });
+
+            return;
+        }
+
+        // Step 2: Receive encrypted session key (client side)
+        if (message.EncryptedSessionKey != null)
+        {
+            peer.KeyExchange.ReceiveEncryptedSessionKey(message.EncryptedSessionKey);
+
+            peer.Aes = new AesEncryption(peer.KeyExchange.SessionKey!);
+
+            _consoleUI.DisplaySystem("Secure channel established");
+
+            await SendToPeer(peer, new Message
+            {
+                Type = MessageType.NameExchange,
+                Content = _localName
+            });
+        }
     }
+
+    private static async Task SendToPeer(Peer peer, Message message)
+    {
+        if (_tcpServer.GetConnectedPeers().Any(p => p.Id == peer.Id))
+        {
+            await _tcpServer.SendToPeerAsync(message);
+        }
+        else
+        {
+            await _tcpClientHandler.SendAsync(peer.Id, message);
+        }
+    } 
 }

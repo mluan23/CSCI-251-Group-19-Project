@@ -13,6 +13,7 @@ using System.Collections.Concurrent;
 using SecureMessenger.Security;
 using static SecureMessenger.Core.Message;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 
 namespace SecureMessenger.Network;
@@ -24,6 +25,7 @@ public class TcpClientHandler
 {
     private readonly ConcurrentDictionary<string, Peer> _connections = new();
     private readonly object _lock = new();
+    private readonly ConcurrentDictionary<string, object> _sendLocks = new();
 
     public event Action<Peer>? OnConnected;
     public event Action<Peer>? OnDisconnected;
@@ -33,6 +35,11 @@ public class TcpClientHandler
     public Peer? _CurrentPeer { get; private set; }
     private KeyExchange? _keyExchange;
     public int LocalPort { get; set; }
+
+    private object GetLock(string peerId)
+    {
+        return _sendLocks.GetOrAdd(peerId, _ => new object());
+    }
 
     /// <summary>
     /// Connect to a peer at the specified address and port.
@@ -68,42 +75,26 @@ public class TcpClientHandler
                 Port = port,
                 IsConnected = true,
             };
+
             _CurrentPeer = peer;
-            var reader = new StreamReader(peer.Stream, leaveOpen: true);
-            using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
-            
-            _keyExchange = new KeyExchange();
-            byte[] publicKey = _keyExchange.GetPublicKey();
-            await writer.WriteLineAsync(Convert.ToBase64String(publicKey));
-            await writer.FlushAsync();
-
-            string? serverPublicKeyBase64 = await reader.ReadLineAsync();
-            _keyExchange.ReceivePublicKey(Convert.FromBase64String(serverPublicKeyBase64!));
-
-            byte[] encryptedSessionKey = _keyExchange.CreateEncryptedSessionKey();
-            await writer.WriteLineAsync(Convert.ToBase64String(encryptedSessionKey));
-            await writer.FlushAsync();
-
-            _keyExchange.Complete();
-            peer.AesKey = _keyExchange.SessionKey;
-            // Console.WriteLine($"Client AES key: {Convert.ToBase64String(peer.AesKey!)}");
-
-            // prompt for name
-            // Console.Write("What is your name? ");
-            // string? name = Console.ReadLine();
-            await writer.WriteLineAsync(name);
-            await writer.WriteLineAsync(LocalPort.ToString());
-            await writer.WriteLineAsync(peer.Id); // add this
-            await writer.FlushAsync();
 
             lock (_lock)
             {
+                if (_connections.Values.Any(p => p.Address.Equals(peer.Address) && p.Port == peer.Port))
+                {
+                    return false;
+                }
+
                 _connections[peer.Id] = peer;
             }
-            string? remoteName = await reader.ReadLineAsync();
-            peer.Name = remoteName!;
+            
+            var reader = new StreamReader(peer.Stream, leaveOpen: true);
+            
+            // Start receiving messages
+            _ = Task.Run(() => ReceiveLoop(peer, reader));
+
+            // Fire connected event
             OnConnected?.Invoke(peer);
-            _ = Task.Run(() => ReceiveLoop(peer, reader)); // run for lifetime of connection
             return true;
         }
         catch (SocketException ex)
@@ -143,10 +134,9 @@ public class TcpClientHandler
                 {
                     Console.WriteLine(message.Content);
                 }
-                if (message.EncryptedContent != null && peer.AesKey != null)
+                if (message.EncryptedContent != null && peer.Aes != null)
                 {
-                    var aes = new AesEncryption(peer.AesKey);
-                    message.Content = aes.Decrypt(message.EncryptedContent);
+                    message.Content = peer.Aes.Decrypt(message.EncryptedContent);
                 }
                 if (message.Signature != null && message.PublicKey != null)
                 {
@@ -190,7 +180,14 @@ public class TcpClientHandler
         {
             try
             {
-                using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
+                lock (GetLock(peerId))
+                {
+                    using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
+                    var msgToSend = message;
+                    string jSON = JsonSerializer.Serialize(msgToSend);
+                    writer.WriteLine(jSON);
+                    writer.Flush();
+                }
                 var messageToSend = new Message
                 {
                     Id = message.Id,
@@ -208,15 +205,11 @@ public class TcpClientHandler
                     messageToSend.Signature = _keyExchange.Sign(
                         System.Text.Encoding.UTF8.GetBytes(message.Content));
                 }
-                if (peer.AesKey != null && message.Type == MessageType.Text)
+                if (peer.Aes != null && message.Type == MessageType.Text)
                 {
-                    var aes = new AesEncryption(peer.AesKey);
-                    messageToSend.EncryptedContent = aes.Encrypt(message.Content);
-                    messageToSend.Content = string.Empty;
+                    var encrypted = peer.Aes.Encrypt(message.Content);
+                    messageToSend.Content = Convert.ToBase64String(encrypted);
                 }
-                string json = System.Text.Json.JsonSerializer.Serialize(messageToSend);
-                await writer.WriteLineAsync(json);
-                await writer.FlushAsync();
             }
             catch (Exception ex)
             {

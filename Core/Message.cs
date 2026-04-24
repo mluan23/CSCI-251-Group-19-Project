@@ -20,6 +20,7 @@ public class Message
     // Sprint 2: Security fields
     public byte[]? Signature { get; set; }
     public byte[]? EncryptedContent { get; set; }
+    public byte[]? EncryptedSessionKey { get; set; }
     public byte[]? PublicKey { get; set; }
 
     public MessageType Type { get; set; } = MessageType.Text;
@@ -37,11 +38,13 @@ public class Message
     public enum MessageType
     {
         Text,
+        NameExchange,
         KeyExchange,
         Heartbeat,
         PeerDiscovery,
         // add this guy so we can properly encrypt
         Command,
-        RoomMessage
+        RoomMessage,
+        PrivateMessage
     }
 }

@@ -75,7 +75,8 @@ public class ConsoleUI
         Console.WriteLine("  /join #room           - Join an existing room");
         Console.WriteLine("  /leave #room          - Leave a room");
         Console.WriteLine("  /rooms                - List available rooms");
-        Console.WriteLine("  /msg #room message    - Send as a message");
+        Console.WriteLine("  /msg #room message    - Send a message to a chat room");
+        Console.WriteLine("  /msg @peer message    - Send a private message to a peer");
         Console.WriteLine(" ");
         Console.WriteLine("  /peers                - List known peers");
         Console.WriteLine("  /history              - View message history");    
@@ -136,7 +137,7 @@ public class ConsoleUI
             "/join" => CommandType.JoinRoom,
             "/leave" => CommandType.LeaveRoom,
             "/rooms" => CommandType.ListRooms,
-            "/msg" => CommandType.MessageRoom,
+            "/msg" => CommandType.Message,
             _ => CommandType.Unknown
         };
 
@@ -144,6 +145,38 @@ public class ConsoleUI
         if (commandType == CommandType.Unknown)
         {
             message = $"Unknown command: {input}";
+        }
+
+        if (commandType == CommandType.Message)
+        {
+            if (args.Length < 2)
+            {
+                return new CommandResult
+                {
+                    IsCommand = true,
+                    CommandType = commandType,
+                    Args = args,
+                    Message = $"Invalid /msg usage: {input}"
+                };
+            }
+            string target = args[0];
+            if (target.StartsWith("#"))
+            {
+                commandType = CommandType.MessageRoom;
+            } else if (target.StartsWith("@"))
+            {
+                commandType = CommandType.MessagePeer;
+            } else
+            {
+                return new CommandResult
+                {
+                    IsCommand = true,
+                    CommandType = commandType,
+                    Args = args,
+                    Message = $"Invalid /msg target: {target}. Use #room or @peer."
+                };
+            }
+
         }
 
         return new CommandResult
@@ -172,7 +205,9 @@ public enum CommandType
     JoinRoom,
     LeaveRoom,
     ListRooms,
-    MessageRoom
+    Message,
+    MessageRoom,
+    MessagePeer
 }
 
 /// <summary>

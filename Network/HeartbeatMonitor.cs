@@ -100,7 +100,7 @@ public class HeartbeatMonitor
     ///       - Call StopMonitoring for that peer
     ///    e. Delay 1 second between checks
     /// </summary>
-    private async Task MonitorLoop()
+    private async Task MonitorLoop(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
         {

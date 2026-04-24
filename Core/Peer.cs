@@ -7,6 +7,7 @@
 
 using System.Net;
 using System.Net.Sockets;
+using SecureMessenger.Security;
 
 namespace SecureMessenger.Core;
 
@@ -27,7 +28,8 @@ public class Peer
     public NetworkStream? Stream { get; set; }
 
     // Sprint 2: Per-session encryption keys, chat rooms
-    public byte[]? AesKey { get; set; }
+    public KeyExchange KeyExchange { get; set; } = new KeyExchange();
+    public AesEncryption? Aes { get; set; }
     public byte[]? PublicKey { get; set; }
     public List<string> Rooms {get; set;} = new List<string>();
 

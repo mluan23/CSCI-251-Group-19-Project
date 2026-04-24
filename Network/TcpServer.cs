@@ -5,9 +5,11 @@
 // Due: Week 5 | Work on: Weeks 3-4
 //
 
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using SecureMessenger.Core;
 using SecureMessenger.Security;
 using static SecureMessenger.Core.Message;
@@ -28,6 +30,8 @@ public class TcpServer
 
     private readonly object _lock = new();
 
+    private readonly ConcurrentDictionary<string, object> _sendLocks = new();
+
     public event Action<Peer>? OnPeerConnected;
     public event Action<Peer>? OnPeerDisconnected;
     public event Action<Peer, Message>? OnMessageReceived;
@@ -39,6 +43,12 @@ public class TcpServer
     // keep a table of known peers
     private readonly Dictionary<string, Peer> _knownPeers = new();
     public string LocalName { get; set; } = string.Empty;
+
+    private object GetLock(string peerId)
+    {
+        return _sendLocks.GetOrAdd(peerId, _ => new object());
+    }
+
     /// Start listening for incoming connections on the specified port.
     ///
     /// TODO: Implement the following:
@@ -116,21 +126,32 @@ public class TcpServer
     /// 4. Create and start a new Thread running ReceiveLoop for this peer
     /// </summary>
     private void HandleNewConnection(TcpClient client)
-    {   
+    {
+
         Peer peer = new Peer
         {
             Client = client,
             Stream = client.GetStream(),
             Address = ((IPEndPoint)client.Client.RemoteEndPoint!).Address,
             Port = ((IPEndPoint)client.Client.RemoteEndPoint!).Port,
-            IsConnected = true
+            IsConnected = true,
+            Name = "Unknown"
         };
+
         lock (_lock)
         {
+            if (_connectedPeers.Any(p => p.Address.Equals(peer.Address) && p.Port == peer.Port))
+            {
+                client.Close(); // reject duplicate
+                return;
+            }
+
             _connectedPeers.Add(peer);
         }
-        Thread receiveThread = new Thread(() => ReceiveLoopAsync(peer));
-        receiveThread.Start();
+
+        OnPeerConnected?.Invoke(peer);
+
+        _ = Task.Run(() => ReceiveLoopAsync(peer));
     }
 
     /// <summary>
@@ -147,155 +168,54 @@ public class TcpServer
     /// 8. In finally block, call DisconnectPeer
     /// </summary>
     private async Task ReceiveLoopAsync(Peer peer)
+{
+    var reader = new StreamReader(peer.Stream);
+
+    try
     {
-        // make the user enter their name here so the server thread not blocked
-        StreamReader streamReader = new StreamReader(peer.Stream);
-        try
+        while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
         {
-            // receive client's public key
-            string? clientPublicKeyBase64 = streamReader.ReadLine();
-            peer.PublicKey = Convert.FromBase64String(clientPublicKeyBase64!);
+            string? line = await reader.ReadLineAsync();
+            if (line == null) break;
 
-            // send server's public key
-            using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
-            writer.WriteLine(Convert.ToBase64String(_rsa.ExportPublicKey()));
-            writer.Flush();
+            var message = System.Text.Json.JsonSerializer.Deserialize<Message>(line);
+            if (message == null) continue;
 
-            // receive encrypted session key, decrypt with server's private key
-            string? encryptedSessionKeyBase64 = streamReader.ReadLine();
-            peer.AesKey = _rsa.DecryptSessionKey(Convert.FromBase64String(encryptedSessionKeyBase64!));
-            // Console.WriteLine($"Server AES key for {peer.Name}: {Convert.ToBase64String(peer.AesKey!)}");
-
-
-            // now read name
-            string? name = streamReader.ReadLine();
-            string? portStr = streamReader.ReadLine();
-            string? pId = streamReader.ReadLine();
-            peer.Id = pId!;
-            peer.Port = int.Parse(portStr!);
-            peer.Name = name;
-            // send back name to client
-            using var nameWriter = new StreamWriter(peer.Stream, leaveOpen: true);
-            nameWriter.WriteLine(LocalName);
-            // nameWriter.WriteLine(peer.Id)
-            nameWriter.Flush();
-            OnPeerConnected?.Invoke(peer);
-            while (peer.IsConnected && !_cancellationTokenSource!.IsCancellationRequested)
+            // 🔐 HANDLE KEY EXCHANGE HERE
+            if (message.Type == MessageType.KeyExchange)
             {
-                string? line = streamReader.ReadLine();
-                if (line == null)
-                {
-                    break;
-                }
-                Message incoming = System.Text.Json.JsonSerializer.Deserialize<Message>(line)!;
-                string content = incoming.Content;
-                if (content.StartsWith("/create "))
-                    {
-                        // strip "/create", just get room
-                        string roomName = content.Substring(8);
-                        if (!_rooms.ContainsKey(roomName))
-                        {
-                            _rooms.Add(roomName, new List<string>());
-                            Console.WriteLine($"{peer.Name} created room {roomName}");
-                        }
-
-                        continue;
-                    }
-                if (content.StartsWith("/join "))
-                    {
-                        string roomName = content.Substring(6);
-                        if (_rooms.ContainsKey(roomName))
-                        {
-                            _rooms[roomName].Add(peer.Id);
-                            peer.Rooms.Add(roomName);
-                            Console.WriteLine($"{peer.Name} joined room {roomName}");
-
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Room {roomName} does not exist. Create it first.");
-                        }
-                        continue;
-                    }
-                if (content.StartsWith("/leave "))
-                    {
-                        string roomName = content.Substring(7);
-                        if (_rooms.ContainsKey(roomName))
-                        {
-                            if (_rooms[roomName].Remove(peer.Id))
-                            {   
-                                peer.Rooms.Remove(roomName);
-                                Console.WriteLine($"{peer.Name} left room {roomName}");
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Room {roomName} does not exist.");
-                        }
-                        continue;
-                    }
-                if (content.StartsWith("/rooms"))
-                {
-                    List<string> createdRooms = GetAvailableRooms();
-                    // Console.WriteLine("Created Rooms:");
-                    // foreach(var room in createdRooms)                    {
-                    //     Console.WriteLine($"- {room}");
-                    // }
-                    await SendAsync(peer.Id, new Message { Content = "Created Rooms:\n" + string.Join("\n", createdRooms) });
-                    continue;
-                    // Console.WriteLine("Created Rooms");
-                    // foreach(var room in createdRooms)
-                    // {
-                    //     Console.WriteLine($"- {room}");
-                    // }
-                    // continue;
-
-                }
-                if (incoming.Type == MessageType.RoomMessage)
-                {
-                    string roomName = incoming.Room!;
-                    string messageContent = incoming.Content;
-                    if (_rooms.ContainsKey(roomName) && _rooms[roomName].Contains(peer.Id))
-                    {
-                        foreach (string peerId in _rooms[roomName])
-                        {
-                            Message msg = new Message
-                            {
-                                Content = messageContent,
-                                Sender = peer.Name,
-                                TargetPeerId = peerId,
-                                Room = roomName,
-                                Signature = incoming.Signature,
-                                PublicKey = peer.PublicKey,
-                                Type = MessageType.RoomMessage
-                            };
-                            OnMessageReceived?.Invoke(peer, msg);
-                        }
-                    }
-                    continue;
-                }
-                incoming.Sender = peer.Name;
-                if (incoming.EncryptedContent != null && peer.AesKey != null)
-                {
-                    var aes = new AesEncryption(peer.AesKey);
-                    incoming.Content = aes.Decrypt(incoming.EncryptedContent);
-                    incoming.EncryptedContent = null; // clear so server re-encrypts for each recipient
-                }
-                // idk name or id check later if stuff breaks
-                incoming.Sender = peer.Name;
-                incoming.PublicKey = peer.PublicKey;
-                OnMessageReceived?.Invoke(peer, incoming);
+                OnMessageReceived?.Invoke(peer, message);
+                continue;
             }
-        }
-        catch (IOException)
-        {
-            
-        }
-        finally
-        {
-            DisconnectPeer(peer);
+
+            // 🔓 Decrypt private messages
+            if (message.Type == MessageType.PrivateMessage && peer.Aes != null)
+            {
+                try
+                {
+                    var bytes = Convert.FromBase64String(message.Content);
+                    message.Content = peer.Aes.Decrypt(bytes);
+                }
+                catch
+                {
+                    Console.WriteLine("Failed to decrypt message");
+                    continue;
+                }
+            }
+
+            message.Sender = peer.Name;
+
+            OnMessageReceived?.Invoke(peer, message);
         }
     }
+    catch (IOException)
+    {
+    }
+    finally
+    {
+        DisconnectPeer(peer);
+    }
+}
 
     /// <summary>
     /// Clean up a disconnected peer.
@@ -355,11 +275,13 @@ public class TcpServer
         }
         try
         {
-            using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
-            string json = System.Text.Json.JsonSerializer.Serialize(message);
-            await writer.WriteLineAsync(json);
-            await writer.FlushAsync();
-            
+            lock (GetLock(peerid))
+            {
+                using var writer = new StreamWriter(peer.Stream, leaveOpen: true);
+                string json = JsonSerializer.Serialize(message);
+                writer.WriteLine(json);
+                writer.Flush();
+            }
         }
         catch (Exception ex)
         {
@@ -394,12 +316,11 @@ public class TcpServer
                         Signature = message.Signature,
                         PublicKey = message.PublicKey
                     };
-                    if (peer.AesKey != null && message.Type == MessageType.Text)
+                    if (peer.Aes != null && message.Type == MessageType.Text)
                     {
                         // Console.WriteLine($"Encrypting content: '{message.Content}'");
-                        var aes = new AesEncryption(peer.AesKey);
-                        messageToSend.EncryptedContent = aes.Encrypt(message.Content);
-                        messageToSend.Content = string.Empty;
+                        var encrypted = peer.Aes.Encrypt(message.Content);
+                        messageToSend.Content = Convert.ToBase64String(encrypted);
                     }
                     string json = System.Text.Json.JsonSerializer.Serialize(messageToSend);
                     await writer.WriteLineAsync(json);
@@ -420,37 +341,19 @@ public class TcpServer
         {
             targetPeer = _connectedPeers.FirstOrDefault(p => p.Id == message.TargetPeerId);
         }
-        if (targetPeer != null && targetPeer.IsConnected && targetPeer.Stream != null)
+
+        if (targetPeer == null || !targetPeer.IsConnected) return;
+
+        try
         {
-            try
-            {
-                using var writer = new StreamWriter(targetPeer.Stream, leaveOpen: true);
-                var messageToSend = new Message
-                {
-                    Id = message.Id,
-                    Sender = message.Sender,
-                    Content = message.Content,
-                    Timestamp = message.Timestamp,
-                    Type = message.Type,
-                    TargetPeerId = message.TargetPeerId,
-                    Room = message.Room,
-                    Signature = message.Signature,
-                    PublicKey = message.PublicKey
-                };
-                if (targetPeer.AesKey != null && message.Type == MessageType.Text)
-                {
-                    var aes = new AesEncryption(targetPeer.AesKey);
-                    messageToSend.EncryptedContent = aes.Encrypt(message.Content);
-                    messageToSend.Content = string.Empty;
-                }
-                string json = System.Text.Json.JsonSerializer.Serialize(messageToSend);
-                await writer.WriteLineAsync(json);
-                await writer.FlushAsync();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to send to {targetPeer.Address}: {ex.Message}");
-            }
+            using var writer = new StreamWriter(targetPeer.Stream, leaveOpen: true);
+            string json = System.Text.Json.JsonSerializer.Serialize(message);
+            await writer.WriteLineAsync(json);
+            await writer.FlushAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to send: {ex.Message}");
         }
     }
 

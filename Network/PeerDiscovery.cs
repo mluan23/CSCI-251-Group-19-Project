@@ -32,12 +32,21 @@ public class PeerDiscovery
     private readonly int _broadcastPort = 5001;
     private Thread? _listenThread;
     private Thread? _broadcastThread;
+    private readonly Func<string> _getLocalName;
+    private readonly Func<IEnumerable<string>> _getLocalRooms;
 
     public event Action<Peer>? OnPeerDiscovered;
     public event Action<Peer>? OnPeerLost;
 
     public int TcpPort { get; private set; }
     public string LocalPeerId { get; } = Guid.NewGuid().ToString()[..8];
+
+    public PeerDiscovery(Func<string> getLocalName, Func<IEnumerable<string>> getLocalRooms)
+    {
+        _getLocalName = getLocalName;
+        _getLocalRooms = getLocalRooms;
+    }
+
 
     /// <summary>
     /// Start broadcasting presence and listening for other peers.
@@ -88,7 +97,9 @@ public class PeerDiscovery
         {
             try
             {
-                var message = $"PEER:{LocalPeerId}:{TcpPort}";
+                var rooms = string.Join(",", _getLocalRooms());
+                var name = _getLocalName();
+                var message = $"PEER:{LocalPeerId}:{name}:{TcpPort}:{rooms}";
                 var data = Encoding.UTF8.GetBytes(message);
                 _sendClient.Send(data, data.Length, broadcastEndpoint);
             }
@@ -149,25 +160,39 @@ public class PeerDiscovery
     private void ProcessDiscoveryMessage(string message, IPAddress senderAddress)
     {
         var parts = message.Split(':');
-        if (parts.Length < 3) return;
+        if (parts.Length < 4) return;
         
         string peerId = parts[1];
-        if (!int.TryParse(parts[2], out int port)) return;
+        string name = parts[2];
+        if (!int.TryParse(parts[3], out int port)) return;
+
+        List<string> rooms = new();
+        if (parts.Length > 4 && !string.IsNullOrEmpty(parts[4]))
+        {
+            rooms = parts[4].Split(',').ToList();
+        }
         if (peerId == LocalPeerId) return;
         
         var peer = new Peer
         {
             Id = peerId,
+            Name = name,
             Address = senderAddress,
             Port = port,
-            LastSeen = DateTime.Now
+            LastSeen = DateTime.Now,
+            Rooms = rooms
         };
 
         if (_knownPeers.TryAdd(peerId, peer))
             OnPeerDiscovered?.Invoke(peer);
         else
         {
-            _knownPeers[peerId].LastSeen = DateTime.Now;
+            var existingPeer = _knownPeers[peerId];
+            existingPeer.LastSeen = DateTime.Now;
+            existingPeer.Rooms = rooms;
+            existingPeer.Name = name;
+            existingPeer.Address = senderAddress;
+            existingPeer.Port = port;
         }
     }
 

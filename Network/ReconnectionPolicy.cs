@@ -76,7 +76,7 @@ public class ReconnectionPolicy
             int delay = (int)Math.Min(InitialDelayMs * Math.Pow(2, attempt - 1), MaxDelayMs);
             try
             {
-                bool success = await _clientHandler.ConnectAsync(peer.IpAddress, peer.Port);
+                bool success = await _clientHandler.ConnectAsync(peer.Address!.ToString(), peer.Port, peer.Name);
                 if (success)
                 {
                     ResetAttempts(peer.Id);
