@@ -72,8 +72,10 @@ class Program
     private static readonly HashSet<string> _networkRooms = new();
     private static readonly HashSet<string> _pendingConnections = new();
     private static MessageHistory? _messageHistory;
+    private static HeartbeatMonitor? _heartbeatMonitor;
+    private static ReconnectionPolicy? _reconnectionPolicy;
 
-    
+
     static async Task Main(string[] args)
     {
         Console.WriteLine("Secure Distributed Messenger");
@@ -92,15 +94,39 @@ class Program
         _consoleUI = new ConsoleUI(_messageQueue);
         _tcpServer = new TcpServer();
         _tcpClientHandler = new TcpClientHandler();
+        _heartbeatMonitor = new HeartbeatMonitor();
+        _reconnectionPolicy = new ReconnectionPolicy(_tcpClientHandler);
         _messageHistory = new MessageHistory();
 
         _ = Task.Run(() => ProcessIncomingMessages(_cancellationTokenSource.Token));
         _ = Task.Run(() => ProcessOutgoingMessages(_cancellationTokenSource.Token));
 
+        _heartbeatMonitor.OnConnectionFailed += async (peerId) =>
+        {
+            if (_peers.TryGetValue(peerId, out var peer))
+            {
+                _consoleUI.DisplaySystem($"[Monitor] {peer.Name} timed out. Attempting reconnection...");
+                bool success = await _reconnectionPolicy.TryReconnect(peer);
+                if (success)
+                {
+                    _consoleUI.DisplaySystem($"[Reconnector] Successfully restored connection to {peer.Name}");
+                    _heartbeatMonitor.StartMonitoring(peerId);
+                }
+                else
+                {
+                    _consoleUI.DisplaySystem($"[Reconnector] Failed to reach {peer.Name} after max retries.");
+                    _peers.TryRemove(peerId, out _);
+                }
+            }
+        };
+        _heartbeatMonitor.Start();
+        _ = Task.Run(() => SendHeartbeatLoop(_cancellationTokenSource.Token));
+
         _tcpServer.OnPeerConnected += async (peer) =>
         {
 
             var publicKey = peer.KeyExchange.GetPublicKey();
+            _heartbeatMonitor.StartMonitoring(peer.Id);
 
             _consoleUI.DisplaySystem($"Connected (awaiting secure channel...)");
 
@@ -113,6 +139,7 @@ class Program
         };
         _tcpServer.OnMessageReceived += async (peer, message) =>
         {
+            _heartbeatMonitor.RecordHeartbeat(peer.Id);
             if (message.Type == MessageType.NameExchange)
             {
                 peer.Name = message.Content;
@@ -189,6 +216,7 @@ class Program
         _tcpClientHandler.OnConnected += async (peer) =>
         {
             var publicKey = peer.KeyExchange.GetPublicKey();
+            _heartbeatMonitor.StartMonitoring(peer.Id);
 
             _consoleUI.DisplaySystem("Connected (awaiting identity...)");
 
@@ -206,12 +234,13 @@ class Program
         };
         _tcpClientHandler.OnMessageReceived += async (peer, message) =>
         {
+            _heartbeatMonitor.RecordHeartbeat(peer.Id);
             if (message.Type == MessageType.NameExchange)
             {
                 peer.Name = message.Content;
 
                 var existing = _peers.Values.FirstOrDefault(p => p.Name == peer.Name && p.Id != peer.Id);
-                
+
                 if (existing != null)
                 {
                     return;
@@ -224,13 +253,13 @@ class Program
                 return;
             }
 
-            if(message.Type == MessageType.KeyExchange)
+            if (message.Type == MessageType.KeyExchange)
             {
                 await HandleKeyExchange(peer, message);
                 return;
             }
 
-            if(message.Type == MessageType.Command)
+            if (message.Type == MessageType.Command)
             {
                 message.Sender ??= peer.Name;
                 HandleCommandMessage(peer, message);
@@ -337,7 +366,8 @@ class Program
             {
                 Console.WriteLine("Empty message not allowed.");
                 continue;
-            };
+            }
+            ;
             CommandResult commandResult = _consoleUI.ParseCommand(input);
             if (!commandResult.IsCommand)
             {
@@ -355,7 +385,7 @@ class Program
             }
 
             switch (commandResult.CommandType)
-            {   
+            {
                 case CommandType.Connect:
                     string connectHost = commandResult.Args[0];
                     int connectPort = int.Parse(commandResult.Args[1]);
@@ -391,14 +421,14 @@ class Program
                 case CommandType.CreateRoom:
                     _localRooms.Add(commandResult.Args[0]);
                     _networkRooms.Add(commandResult.Args[0]);
-                    _consoleUI.DisplaySystem($"You created room: {commandResult.Args[0]}"); 
+                    _consoleUI.DisplaySystem($"You created room: {commandResult.Args[0]}");
                     var createMsg = new Message
                     {
                         Content = $"/create {commandResult.Args[0]}",
                         Type = MessageType.Command,
                         Sender = _localName
                     };
-                    foreach(var peer in _peers.Values)
+                    foreach (var peer in _peers.Values)
                     {
                         if (_tcpServer.GetConnectedPeers().Any(sp => sp.Id == peer.Id))
                         {
@@ -419,7 +449,7 @@ class Program
                         Type = MessageType.Command,
                         Sender = _localName
                     };
-                    foreach(var peer in _peers.Values)
+                    foreach (var peer in _peers.Values)
                     {
                         if (_tcpServer.GetConnectedPeers().Any(sp => sp.Id == peer.Id))
                         {
@@ -439,7 +469,7 @@ class Program
                         Type = MessageType.Command,
                         Sender = _localName
                     };
-                    foreach(var peer in _peers.Values)
+                    foreach (var peer in _peers.Values)
                     {
                         if (_tcpServer.GetConnectedPeers().Any(sp => sp.Id == peer.Id))
                         {
@@ -453,8 +483,8 @@ class Program
                 case CommandType.MessageRoom:
                     string room = commandResult.Args[0].TrimStart('#');
                     string content = string.Join(" ", commandResult.Args[1..]);
-                    _messageQueue.EnqueueOutgoing(new Message 
-                    { 
+                    _messageQueue.EnqueueOutgoing(new Message
+                    {
                         Content = content,
                         Room = room,
                         Type = MessageType.RoomMessage
@@ -464,8 +494,8 @@ class Program
                     var roomList = _networkRooms.Count > 0 ? string.Join(", ", _networkRooms) : "No rooms";
                     _consoleUI.DisplaySystem($"Network rooms: {roomList}");
                     break;
-                    // _tcpServer.ListRooms();
-                    //break;
+                // _tcpServer.ListRooms();
+                //break;
                 case CommandType.MessagePeer:
                     string targetPeerName = commandResult.Args[0][1..]; // remove @
                     string privateContent = string.Join(" ", commandResult.Args[1..]);
@@ -475,8 +505,8 @@ class Program
                         Console.WriteLine($"No peer found with name: {targetPeerName}");
                         break;
                     }
-                    _messageQueue.EnqueueOutgoing(new Message 
-                    { 
+                    _messageQueue.EnqueueOutgoing(new Message
+                    {
                         Content = privateContent,
                         TargetPeerId = targetPeer.Id,
                         Type = MessageType.PrivateMessage,
@@ -491,7 +521,7 @@ class Program
 
         _cancellationTokenSource.Cancel();
         var peersToDisconnect = _tcpServer.GetConnectedPeers();
-        foreach(var peer in peersToDisconnect)
+        foreach (var peer in peersToDisconnect)
         {
             _tcpClientHandler.Disconnect(peer.Id);
         }
@@ -559,67 +589,67 @@ class Program
         }
     }
     private static async Task BroadcastToPeers(Message message)
-{
-    if (message.Type == MessageType.Command)
-        return;
-
-    var targets = _peers.Values.Where(p => p.IsConnected);
-
-    var tasks = targets.Select(async peer =>
     {
-        try
+        if (message.Type == MessageType.Command)
+            return;
+
+        var targets = _peers.Values.Where(p => p.IsConnected);
+
+        var tasks = targets.Select(async peer =>
         {
-            Message msgToSend;
-
-            if (message.Type == MessageType.PrivateMessage)
+            try
             {
-                if (peer.Id != message.TargetPeerId)
-                    return;
+                Message msgToSend;
 
-                if (peer.Aes == null)
-                    return;
-
-                var encrypted = peer.Aes.Encrypt(message.Content);
-
-                msgToSend = new Message
+                if (message.Type == MessageType.PrivateMessage)
                 {
-                    Id = message.Id,
-                    Sender = message.Sender,
-                    EncryptedContent = encrypted,
-                    Timestamp = message.Timestamp,
-                    Type = MessageType.PrivateMessage,
-                    TargetPeerId = peer.Id
-                };
+                    if (peer.Id != message.TargetPeerId)
+                        return;
+
+                    if (peer.Aes == null)
+                        return;
+
+                    var encrypted = peer.Aes.Encrypt(message.Content);
+
+                    msgToSend = new Message
+                    {
+                        Id = message.Id,
+                        Sender = message.Sender,
+                        EncryptedContent = encrypted,
+                        Timestamp = message.Timestamp,
+                        Type = MessageType.PrivateMessage,
+                        TargetPeerId = peer.Id
+                    };
+                }
+                else
+                {
+                    msgToSend = new Message
+                    {
+                        Id = message.Id,
+                        Sender = message.Sender,
+                        Content = message.Content,
+                        Timestamp = message.Timestamp,
+                        Type = message.Type,
+                        Room = message.Room,
+                        TargetPeerId = peer.Id
+                    };
+                }
+
+                if (_tcpServer.GetConnectedPeers().Any(p => p.Id == peer.Id))
+                    await _tcpServer.SendToPeerAsync(msgToSend);
+                else
+                    await _tcpClientHandler.SendAsync(peer.Id, msgToSend);
             }
-            else
+            catch (Exception ex)
             {
-                msgToSend = new Message
-                {
-                    Id = message.Id,
-                    Sender = message.Sender,
-                    Content = message.Content,
-                    Timestamp = message.Timestamp,
-                    Type = message.Type,
-                    Room = message.Room,
-                    TargetPeerId = peer.Id
-                };
+                _consoleUI.DisplaySystem($"Error sending to {peer.Id}: {ex.Message}");
             }
+        });
 
-            if (_tcpServer.GetConnectedPeers().Any(p => p.Id == peer.Id))
-                await _tcpServer.SendToPeerAsync(msgToSend);
-            else
-                await _tcpClientHandler.SendAsync(peer.Id, msgToSend);
-        }
-        catch (Exception ex)
+        foreach (var task in tasks)
         {
-            _consoleUI.DisplaySystem($"Error sending to {peer.Id}: {ex.Message}");
+            await task;
         }
-    });
-
-    foreach (var task in tasks)
-    {
-        await task;
-    }
     }
 
     private static void HandleCommandMessage(Peer peer, Message message)
@@ -629,7 +659,7 @@ class Program
 
         string senderName = message.Sender ?? peer.Name ?? "Unknown";
         var registeredPeer = _peers.Values.FirstOrDefault(p => p.Id == peer.Id) ?? peer;
-        
+
         string command = parts[0];
 
         if (command == "/join" && parts.Length >= 2)
@@ -645,17 +675,17 @@ class Program
             string room = parts[1];
             registeredPeer.Rooms.Remove(room);
             _consoleUI.DisplaySystem($"{senderName} left {room}");
-        } 
+        }
         else if (command == "/create" && parts.Length >= 2)
         {
             string room = parts[1];
             _networkRooms.Add(room);
-            if(!registeredPeer.Rooms.Contains(room))
+            if (!registeredPeer.Rooms.Contains(room))
             {
                 registeredPeer.Rooms.Add(room);
                 _consoleUI.DisplaySystem($"{senderName} created {room}");
             }
-            
+
         }
         else if (command == "/rooms")
         {
@@ -720,5 +750,25 @@ class Program
         {
             await _tcpClientHandler.SendAsync(peer.Id, message);
         }
-    } 
+    }
+
+    private static async Task SendHeartbeatLoop(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(_heartbeatMonitor!.HeartbeatInterval, ct);
+                var hbMessage = new Message { Type = MessageType.Heartbeat, Content = "PING" };
+                await BroadcastToPeers(hbMessage);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception) { }
+        }
+    }
+
+
 }
